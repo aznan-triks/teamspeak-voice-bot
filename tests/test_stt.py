@@ -102,6 +102,8 @@ class LaughTest(unittest.TestCase):
         self.assertEqual(stt(b"\x00\x01" * 16000), "local (rires)")
         stt._tagger = FakeTagger(0.05)
         self.assertEqual(stt(b"\x00\x01" * 16000), "local")
+        stt._tagger, stt.cfg["noise_phrases"] = FakeTagger(0.5), ["local"]  # a laugh alone, heard as "Merci."
+        self.assertEqual(stt(b"\x00\x01" * 16000), "(rires)")
 
 
 if __name__ == "__main__":

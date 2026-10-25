@@ -104,7 +104,11 @@ class Transcriber:
 
     def __call__(self, pcm: bytes) -> str:
         text = fix_names(self.transcribe(pcm), self.names())
-        return f"{text} {self.cfg.get('laugh_text', '(rires)')}".strip() if self.laughing(pcm) else text
+        if not self.laughing(pcm):
+            return text
+        laugh = self.cfg.get("laugh_text", "(rires)")
+        noise = re.sub(r"\W+", "", text.lower()) in self.cfg.get("noise_phrases", ["merci"])  # a laugh alone heard as "Merci."
+        return laugh if noise else f"{text} {laugh}".strip()
 
     def laughing(self, pcm: bytes) -> bool:
         """The speech model drops laughter: a small sound tagger (CED, AudioSet classes) hears it instead, in ~20 ms."""
@@ -163,8 +167,12 @@ class Transcriber:
         import numpy as np
 
         audio = np.frombuffer(pcm, np.int16).astype(np.float32) / 32768.0
-        result = self.local().recognize(audio, sample_rate=16000, **self.options)
-        return (result if isinstance(result, str) else " ".join(s.text.strip() for s in result)).strip()
+        model = self.local()
+        if hasattr(model, "asr"):  # live: a 2.7 s "Ooooh" came out as 55 s of "o" and froze the bot; cap the text length
+            model.asr.config["max_sequence_length"] = 30 + int(len(audio) / 16000 * self.cfg.get("max_tokens_per_s", 10))
+        result = model.recognize(audio, sample_rate=16000, **self.options)
+        text = result if isinstance(result, str) else " ".join(s.text.strip() for s in result)
+        return text.replace("<unk>", "").strip()  # "<unk>": a sign Canary cannot write ("90°" came out "90<unk>")
 
     def with_gemini(self, pcm: bytes) -> str:
         buf = io.BytesIO()
