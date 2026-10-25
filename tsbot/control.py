@@ -46,9 +46,16 @@ class State:
         self.clients: list = []
         self.speaking: deque = deque(maxlen=50)
 
+    on_clients = None  # set when the bot follows people: called with each new client list
+
     def on_event(self, event: str, header: dict, to_speaker) -> None:
         if event == "clients":
             self.clients = [{**raw, "identity": to_speaker(raw).identity} for raw in header.get("clients", [])]
+            if self.on_clients:
+                try:
+                    self.on_clients(self.clients)
+                except Exception:
+                    log.exception("following people failed")  # never stop listening because of it
         elif event == "speaking":
             raw = header.get("speaker", {})
             self.speaking.append({**raw, "identity": to_speaker(raw).identity, "ms": int(time.time() * 1000)})

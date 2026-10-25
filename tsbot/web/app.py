@@ -48,6 +48,8 @@ FIELDS = [
     ("llm", "enabled", "bool", "Le bot répond et agit", "Désactivé : il transcrit et archive seulement."),
     ("llm", "wake_words", "list", "Mots d'éveil", "Mots qui réveillent le bot (son nom, au début de la phrase). Teste-les : la transcription doit les écrire juste. Un par ligne."),
     ("llm", "personality", "text", "Personnalité", "Comment le bot parle et se comporte : son caractère, son humour, ce qu'il aime. Il suit ce texte pour le ton, jamais pour enfreindre ses règles."),
+    ("follow", "enabled", "bool", "Suivre les joueurs", "Le bot va dans le salon où sont le plus de joueurs déclarés (page Identités). Si des joueurs se séparent, un deuxième bot vient dans l'autre salon, puis repart quand ils se retrouvent."),
+    ("follow", "nickname_2", "str", "Pseudo du deuxième bot", "Garde « (enregistrement) » : les gens doivent savoir qu'il écoute."),
     ("llm", "follow_up_s", "int", "Temps pour poursuivre la conversation (s)", "Après une réponse du bot, on peut continuer à lui parler sans redire son nom pendant ce temps. 0 = toujours dire son nom."),
     ("llm", "confirm_timeout_s", "int", "Temps pour dire « oui » (s)", "Délai après la question du bot, avant d'abandonner l'action."),
     ("llm", "warm_up", "bool", "Préchauffage au démarrage", "Le LLM lit ses consignes une fois au démarrage : la première question est bien plus rapide."),

@@ -22,6 +22,23 @@ def plain(text: str) -> str:
     return re.sub(r"\W+", " ", text).strip().lower()
 
 
+def repeats(text: str, before: str) -> bool:
+    """Same answer in other words: most words of the shorter one are in the other
+    ("Mammouth est premier avec 54 points" / "Le premier, c'est Mammouth avec 54 points")."""
+    a, b = ({w for w in plain(s).split() if len(w) > 2} for s in (text, before))
+    if min(len(a), len(b)) < 3:
+        return plain(text) == plain(before)
+    return len(a & b) / min(len(a), len(b)) >= 0.6
+
+
+def no_relaunch(text: str) -> str:
+    """The small model ends its answers with a question to keep talking ("Et toi, t'es où ?"), whatever its
+    instructions say: those questions are dropped, as long as something else is left to say."""
+    sentences = re.split(r"(?<=[.!?…])\s+", text.strip())
+    kept = [s for s in sentences if not s.endswith("?")]
+    return " ".join(kept) if kept else text
+
+
 def valid(args, schema: dict) -> bool:
     """JSON Schema subset: object with `properties` (type, enum) and `required`; unknown keys are refused."""
     if not isinstance(args, dict):
@@ -98,12 +115,14 @@ class Router:
             return
         kind = reply.get("type")
         if kind in ("answer", "clarify", "explain") and isinstance(reply.get("text"), str):
-            said = [plain(line.split("] ", 1)[-1]) for line in self.bot.window[-6:]]
-            if plain(reply["text"]) in said:
-                log.info("repeated answer not said again: %s", reply["text"][:80])  # small models copy their last line
+            text = no_relaunch(reply["text"]) if kind == "answer" else reply["text"]
+            me = f"[{self.bot.me.nickname}] " if self.bot.me else "[bot] "
+            mine = [line[len(me):] for line in self.bot.window if line.startswith(me)][-4:]
+            if any(repeats(text, s) for s in mine):
+                log.info("repeated answer not said again: %s", text[:80])  # small models say the same thing again
                 return
             self.replied_ms = int(time.time() * 1000)
-            seconds = self.bot.say(reply["text"])
+            seconds = self.bot.say(text)
             self.conversing_until = now + time.monotonic() - asked + seconds + self.cfg.get("follow_up_s", 30)
             self.partner = t.speaker.uid
         elif kind == "propose":

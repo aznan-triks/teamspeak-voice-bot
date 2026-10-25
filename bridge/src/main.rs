@@ -5,7 +5,7 @@
 //! Reads `{"cmd":"play","samples":N}` + N samples of 16-bit PCM, 48 kHz, mono on stdin and says
 //! them in the channel; `{"cmd":"message","client_id":N,"text":"...","poke":true}` sends a private text
 //! message (and a poke, which pops up in the client);
-//! `{"cmd":"clients"}` answers with the list of connected clients. Private messages to the bot become
+//! `{"cmd":"clients"}` answers with the list of connected clients; `{"cmd":"move","channel_id":N}` moves the bot. Private messages to the bot become
 //! `{"event":"text"}` lines. Logs go to stderr.
 //! Full protocol: docs/ARCHITECTURE.md §3.
 
@@ -20,7 +20,8 @@ use audiopus::{Application, Channels, SampleRate};
 use futures::prelude::*;
 use serde_json::{json, Value};
 use tsclientlib::audio::AudioHandler;
-use tsclientlib::{ClientId, Connection, DisconnectOptions, Identity, OutCommandExt, StreamItem};
+use tsclientlib::messages::c2s;
+use tsclientlib::{ChannelId, ClientId, Connection, DisconnectOptions, Identity, OutCommandExt, StreamItem};
 use tsproto_packets::packets::{AudioData, CodecType, OutAudio};
 
 /// 20 ms of 48 kHz interleaved stereo: the AudioHandler's output format.
@@ -36,6 +37,7 @@ enum Command {
 	Play(Vec<i16>),
 	Message(u16, String, bool),
 	Clients,
+	Move(u64),
 }
 
 /// Reads commands from stdin until it closes.
@@ -55,6 +57,7 @@ fn read_commands(commands: Sender<Command>) -> Result<()> {
 				cmd["poke"].as_bool().unwrap_or(false),
 			),
 			Some("clients") => Command::Clients,
+			Some("move") => Command::Move(cmd["channel_id"].as_u64().unwrap_or(0)),
 			other => {
 				tracing::warn!(?other, "unknown command ignored");
 				line.clear();
@@ -285,6 +288,14 @@ async fn main() -> Result<()> {
 							let ids: Vec<u16> = con.get_state()?.clients.keys().map(|c| c.0).collect();
 							let clients: Vec<Value> = ids.into_iter().map(|id| speaker(&con, id)).collect();
 							emit(&out, json!({ "event": "clients", "clients": clients }), &[]);
+						}
+						Command::Move(channel) => {
+							// Where the bot goes when it follows people; a refused move (password, rights) only logs.
+							let state = con.get_state()?;
+							let part = state.clients.get(&state.own_client).map(|me| me.client_move(ChannelId(channel)));
+							if let Some(part) = part {
+								c2s::OutClientMoveMessage::new(&mut std::iter::once(part)).send(&mut con)?;
+							}
 						}
 					}
 				}

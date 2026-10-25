@@ -24,6 +24,7 @@ class LLM:
         self.temperature = cfg.get("temperature", 0.5)  # 0 made a small model repeat itself word for word
         self.timeout = cfg.get("timeout_s", 20)
         self.json_mode = cfg.get("json_mode", True)
+        self.extra = cfg.get("extra", {})  # provider options, e.g. DeepSeek: {"reasoning_effort": "low"}
 
     def _request(self, path: str, body: dict | None = None) -> dict:
         headers = {"Content-Type": "application/json"}
@@ -41,7 +42,7 @@ class LLM:
             return False
 
     def request_chat(self, messages: list) -> str:
-        body = {"model": self.model, "temperature": self.temperature, "messages": messages}
+        body = {"model": self.model, "temperature": self.temperature, "messages": messages, **self.extra}
         if self.json_mode:
             body["response_format"] = {"type": "json_object"}
         return self._request("/chat/completions", body)["choices"][0]["message"]["content"] or ""

@@ -164,6 +164,17 @@ class RouterTest(unittest.TestCase):
         self.hear(ALICE, "jarvis tu m'entends ?", now=5)
         self.assertEqual(self.voice.said, ["Ola, je suis là."])
 
+    def test_same_answer_in_other_words_and_relaunch_questions(self):
+        # Real exchange of 2026-10-25: the same answer three times, each ending with a question to relaunch.
+        self.setup(FakeLLM(
+            {"type": "answer", "text": "Mammouth est le premier Scatophile avec 54 points. Et toi, tu es quoi dans ce classement ?"},
+            {"type": "answer", "text": "Le premier Scatophile, c'est Mammouth avec 54 points. Quant à toi, Ilker, tu es où ?"},
+            {"type": "clarify", "text": "Tu parles de qui ?"}))
+        self.hear(ALICE, "jarvis c'est qui le premier Scatophile ?", now=1)
+        self.hear(ALICE, "jarvis c'est à toi que je parlais", now=5)
+        self.hear(ALICE, "jarvis donne des points", now=9)
+        self.assertEqual(self.voice.said, ["Mammouth est le premier Scatophile avec 54 points.", "Tu parles de qui ?"])
+
     def test_lines_said_while_the_bot_was_thinking_are_not_answered_again(self):
         llm = FakeLLM({"type": "answer", "text": "Salut !"}, {"type": "answer", "text": "Encore ?"})
         self.setup(llm)

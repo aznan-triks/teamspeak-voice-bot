@@ -9,7 +9,9 @@ import re
 import signal
 import subprocess
 import sys
+import threading
 import time
+from pathlib import Path
 import tomllib
 
 from . import plugins
@@ -50,12 +52,17 @@ def to_speaker(cfg: dict, raw: dict) -> Speaker:
     )
 
 
-def serve(stream, transcribe, archive: Archive, loaded: list, cfg: dict, bot=None, router=None, state=None) -> None:
+def serve(stream, transcribe, archive: Archive, loaded: list, cfg: dict, bot=None, router=None, state=None,
+          lock=None) -> None:
+    """One bot's connection. `lock`: shared by the bots, so they handle one sentence at a time."""
+    lock = lock or threading.Lock()
     stt = cfg.get("stt", {})
     opt_out = set(cfg.get("privacy", {}).get("opt_out_uids", []))
     for header, pcm in read_frames(stream):
         raw = header.get("speaker", {})
         if header["event"] == "clients" and bot is not None and bot.me is not None:
+            own = next((c for c in header.get("clients", []) if c.get("client_id") == bot.me.client_id), None)
+            bot.channel_id = own.get("channel_id") if own else bot.channel_id  # it may have moved to follow people
             bot.listeners = [c["uid"] for c in header.get("clients", []) if c.get("uid") and c.get("hearing")
                              and c.get("channel_id") == bot.channel_id and c.get("client_id") != bot.me.client_id]
         if state is not None and header["event"] in ("clients", "speaking"):
@@ -78,31 +85,38 @@ def serve(stream, transcribe, archive: Archive, loaded: list, cfg: dict, bot=Non
         duration_ms = len(pcm) // BYTES_PER_MS
         if duration_ms < stt.get("min_utterance_ms", 400):
             continue
-        t0 = time.monotonic()
-        text = transcribe(pcm)
-        stt_ms = int((time.monotonic() - t0) * 1000)
-        # Canary writes "Merci." for short noises (breath, keyboard): measured on the real channel, 2026-10-25.
-        noise = duration_ms < stt.get("noise_max_ms", 1500) and re.sub(r"\W+", "", text.lower()) in stt.get("noise_phrases", ["merci"])
-        if not text or noise:
-            continue
-        speaker = to_speaker(cfg, raw)
-        archive_id = archive.add(
-            started_ms=header.get("started_ms", 0), duration_ms=duration_ms, client_id=speaker.client_id,
-            uid=speaker.uid, nickname=speaker.nickname, identity=speaker.identity,
-            server_groups=speaker.server_groups, channel_id=raw.get("channel_id"), text=text, stt_ms=stt_ms,
-            listeners=header.get("listeners", []),
-        )
-        if bot:
-            bot.listeners = header.get("listeners", bot.listeners)
-        log.info("[%s] %s  (%d ms audio, %d ms STT)", speaker.identity or speaker.nickname, text, duration_ms, stt_ms)
-        if hasattr(transcribe, "compare"):
-            transcribe.compare(pcm, speaker.identity or speaker.nickname, text)
-        t = Transcription(archive_id, speaker, header.get("started_ms", 0), duration_ms, text)
-        if bot:
-            bot.heard(t)
-        plugins.dispatch(loaded, "on_transcription", t)
-        if router:
-            router.handle(t)
+        with lock:
+            heard(header, raw, pcm, duration_ms, transcribe, archive, loaded, cfg, bot, router)
+
+
+def heard(header: dict, raw: dict, pcm: bytes, duration_ms: int, transcribe, archive, loaded, cfg, bot, router) -> None:
+    """One utterance: transcribe, archive, tell the plugins and the conversation."""
+    stt = cfg.get("stt", {})
+    t0 = time.monotonic()
+    text = transcribe(pcm)
+    stt_ms = int((time.monotonic() - t0) * 1000)
+    # Canary writes "Merci." for short noises (breath, keyboard): measured on the real channel, 2026-10-25.
+    noise = duration_ms < stt.get("noise_max_ms", 1500) and re.sub(r"\W+", "", text.lower()) in stt.get("noise_phrases", ["merci"])
+    if not text or noise:
+        return
+    speaker = to_speaker(cfg, raw)
+    archive_id = archive.add(
+        started_ms=header.get("started_ms", 0), duration_ms=duration_ms, client_id=speaker.client_id,
+        uid=speaker.uid, nickname=speaker.nickname, identity=speaker.identity,
+        server_groups=speaker.server_groups, channel_id=raw.get("channel_id"), text=text, stt_ms=stt_ms,
+        listeners=header.get("listeners", []),
+    )
+    if bot:
+        bot.listeners = header.get("listeners", bot.listeners)
+    log.info("[%s] %s  (%d ms audio, %d ms STT)", speaker.identity or speaker.nickname, text, duration_ms, stt_ms)
+    if hasattr(transcribe, "compare"):
+        transcribe.compare(pcm, speaker.identity or speaker.nickname, text)
+    t = Transcription(archive_id, speaker, header.get("started_ms", 0), duration_ms, text)
+    if bot:
+        bot.heard(t)
+    plugins.dispatch(loaded, "on_transcription", t)
+    if router:
+        router.handle(t)
 
 
 def spawn_bridge(ts: dict) -> subprocess.Popen:
@@ -140,17 +154,53 @@ def run(cfg: dict, logs=None) -> None:
     transcribe = Transcriber(cfg.get("stt", {}), api_key=cfg.get("llm", {}).get("api_key", ""))
     archive = Archive(cfg.get("archive", {}).get("path", "data/archive.sqlite3"))
     loaded = plugins.load(cfg)
-    bridge = spawn_bridge(cfg["teamspeak"])
-    voice = Voice(cfg.get("voice", {}), bridge.stdin)
-    bot = Bot(voice, archive)
-    plugins.dispatch(loaded, "attach", bot)
-    router = None
+    llm = None
     if cfg.get("llm", {}).get("enabled"):
         from .llm import LLM
+
+        llm = LLM(cfg["llm"])
+
+    def seat(ts: dict) -> tuple:
+        """One bot on the server: its connection, voice and conversation. The models are shared."""
         from .router import Router
 
-        router = Router(cfg["llm"], LLM(cfg["llm"]), bot, loaded)
-    state = State()
+        bridge = spawn_bridge(ts)
+        voice = Voice(cfg.get("voice", {}), bridge.stdin)
+        bot = Bot(voice, archive)
+        return bridge, voice, bot, Router(cfg["llm"], llm, bot, loaded) if llm else None
+
+    bridge, voice, bot, router = seat(cfg["teamspeak"])
+    plugins.dispatch(loaded, "attach", bot)
+    state, lock = State(), threading.Lock()
+    follow = cfg.get("follow", {})
+    if follow.get("enabled"):
+        from .follow import Follower
+
+        follower, seats = Follower(follow), [(bridge, voice, bot, router)]
+
+        def on_clients(clients: list) -> None:
+            """Every few seconds: go where the known players are, open or close the second bot."""
+            for _, _, b, _ in seats:  # where each bot really is
+                b.channel_id = next((c.get("channel_id") for c in clients if b.me and c.get("uid") == b.me.uid), b.channel_id)
+            todo = follower.decide(clients, [b.me.uid if b.me else None for _, _, b, _ in seats], time.monotonic())
+            if todo["stop"] and len(seats) > 1:
+                log.info("following: second bot stopped, everyone is together again")
+                stop_bridge(seats.pop()[0])
+            if todo["start"]:
+                log.info("following: players split up, second bot started")
+                ts = {**cfg["teamspeak"], "channel": "", "nickname": follow.get("nickname_2", "BoToP 2 (enregistrement)"),
+                      "identity_file": follow.get("identity_file_2") or str(
+                          Path(cfg["teamspeak"].get("identity_file", "data/identity.json")).with_name("identity_2.json"))}
+                seats.append(seat(ts))
+                b2, _, bot2, router2 = seats[-1]
+                threading.Thread(target=serve, args=(b2.stdout, transcribe, archive, loaded, cfg, bot2, router2, None, lock),
+                                 daemon=True).start()
+            for i, channel in todo["move"].items():
+                if i < len(seats):
+                    log.info("following: moving bot %d to channel %s", i + 1, channel)
+                    seats[i][1].send({"cmd": "move", "channel_id": channel})
+
+        state.on_clients = on_clients
 
     def names() -> list:
         """What speech-to-text should expect: known people, connected nicknames, players, the wake words."""
@@ -167,7 +217,7 @@ def run(cfg: dict, logs=None) -> None:
     if cfg.get("web", {}).get("control", True):
         Control(cfg, bot, voice, router, loaded, state, logs).start()
     try:
-        serve(bridge.stdout, transcribe, archive, loaded, cfg, bot, router, state)
+        serve(bridge.stdout, transcribe, archive, loaded, cfg, bot, router, state, lock)
     finally:
         stop_bridge(bridge)
     sys.exit(bridge.returncode or 0)
