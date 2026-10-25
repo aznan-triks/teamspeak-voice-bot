@@ -63,9 +63,9 @@ class Scores:
         return "C'est fait."
 
 
-def utterance(speaker, text, n=[0]):
+def utterance(speaker, text, n=[0], started_ms=None):
     n[0] += 1
-    return Transcription(n[0], speaker, 0, 1000, text)
+    return Transcription(n[0], speaker, int(time.time() * 1000) if started_ms is None else started_ms, 1000, text)
 
 
 class WindowTest(unittest.TestCase):
@@ -87,8 +87,8 @@ class RouterTest(unittest.TestCase):
         self.router = Router({"wake_words": ["jarvis"], "prompt_file": prompt_file}, llm, self.bot, [self.plugin])
         self.router.start(now=0)
 
-    def hear(self, speaker, text, now=1.0):
-        t = utterance(speaker, text)
+    def hear(self, speaker, text, now=1.0, started_ms=None):
+        t = utterance(speaker, text, started_ms=started_ms)
         self.bot.heard(t)
         self.router.handle(t, now=now)
 
@@ -157,6 +157,31 @@ class RouterTest(unittest.TestCase):
         self.hear(ALICE, "jarvis ça va ?", now=1)
         self.hear(ALICE, "jarvis tu m'entends ?", now=5)
         self.assertEqual(self.voice.said, ["Salut !"])
+
+    def test_an_answer_differing_only_by_punctuation_is_not_said_again(self):
+        self.setup(FakeLLM({"type": "answer", "text": "Ola, je suis là."}, {"type": "answer", "text": "Ola ! Je suis là"}))
+        self.hear(ALICE, "jarvis ça va ?", now=1)
+        self.hear(ALICE, "jarvis tu m'entends ?", now=5)
+        self.assertEqual(self.voice.said, ["Ola, je suis là."])
+
+    def test_lines_said_while_the_bot_was_thinking_are_not_answered_again(self):
+        llm = FakeLLM({"type": "answer", "text": "Salut !"}, {"type": "answer", "text": "Encore ?"})
+        self.setup(llm)
+        self.router.cfg["follow_up_s"] = 30
+        before = int(time.time() * 1000) - 5000
+        self.hear(ALICE, "jarvis ça va ?", now=1)
+        self.hear(ALICE, "jarvis t'es là ou quoi ?", now=2, started_ms=before)  # queued during the first answer
+        self.assertEqual(llm.calls, 1)
+        self.hear(BOB, "jarvis et moi alors ?", now=3, started_ms=before)  # someone else still gets an answer
+        self.assertEqual(llm.calls, 2)
+
+    def test_a_lone_word_does_not_go_on_the_conversation(self):
+        llm = FakeLLM({"type": "answer", "text": "Salut !"})
+        self.setup(llm)
+        self.router.cfg["follow_up_s"] = 30
+        self.hear(ALICE, "jarvis ça va ?", now=1)
+        self.hear(ALICE, "Merci.", now=5)  # often a noise misheard: no LLM call
+        self.assertEqual(llm.calls, 1)
 
     def test_personality_is_added_to_the_prompt(self):
         self.setup(FakeLLM())

@@ -17,6 +17,11 @@ NO = re.compile(r"^\W*(non|nan|no|annule|stop|laisse tomber)\b", re.I)
 TYPES = {"string": str, "integer": int, "number": (int, float), "boolean": bool}
 
 
+def plain(text: str) -> str:
+    """Words only: "Ola ! Je suis BoToP" and "Ola, je suis BoToP" are the same answer."""
+    return re.sub(r"\W+", " ", text).strip().lower()
+
+
 def valid(args, schema: dict) -> bool:
     """JSON Schema subset: object with `properties` (type, enum) and `required`; unknown keys are refused."""
     if not isinstance(args, dict):
@@ -43,6 +48,7 @@ class Router:
         if cfg.get("personality"):
             self.prompt += "\nPERSONNALITÉ :\n" + cfg["personality"].strip() + "\n"
         self.conversing_until = 0.0  # after the bot answered, people can go on talking to it without its name
+        self.partner, self.replied_ms = None, 0  # who the bot last answered, and when it started saying it (Unix ms)
         self.wake_words = cfg.get("wake_words", ["hector"])
         self.wake = re.compile(r"\b(" + "|".join(map(re.escape, self.wake_words)) + r")\b", re.I)
         self.actions: dict = {}
@@ -68,6 +74,9 @@ class Router:
             if now >= self.next_probe:
                 self._probe(now)
             return  # degraded: keep listening and archiving, take no action
+        # Said before the bot's reply to this person began (queued while the LLM thought): already answered.
+        if t.speaker.uid == self.partner and t.started_ms < self.replied_ms:
+            return
         same = self.pending is not None and self.pending["action"].requested_by.uid == t.speaker.uid
         addressed = bool(self.wake.search(t.text))
         # A plain "oui"/"non" settles it at once; "Non Hector, plutôt deux points" goes to the LLM.
@@ -78,7 +87,9 @@ class Router:
         if addressed:
             plugins.dispatch(self.loaded, "on_command", t)
         # Only the person the bot is talking with may go on without its name: others chatting are left alone.
-        self.following = now < self.conversing_until and t.speaker.uid == getattr(self, "partner", None)
+        # A lone "Merci." or "Ah." (often noise misheard) does not go on the conversation.
+        self.following = (now < self.conversing_until and t.speaker.uid == self.partner
+                          and len(t.text.split()) >= self.cfg.get("follow_up_min_words", 3))
         if not (addressed or same or self.following):
             return
         asked = time.monotonic()
@@ -87,10 +98,11 @@ class Router:
             return
         kind = reply.get("type")
         if kind in ("answer", "clarify", "explain") and isinstance(reply.get("text"), str):
-            said = [line.split("] ", 1)[-1] for line in self.bot.window[-6:]]
-            if reply["text"].strip().lower() in (s.strip().lower() for s in said):
+            said = [plain(line.split("] ", 1)[-1]) for line in self.bot.window[-6:]]
+            if plain(reply["text"]) in said:
                 log.info("repeated answer not said again: %s", reply["text"][:80])  # small models copy their last line
                 return
+            self.replied_ms = int(time.time() * 1000)
             seconds = self.bot.say(reply["text"])
             self.conversing_until = now + time.monotonic() - asked + seconds + self.cfg.get("follow_up_s", 30)
             self.partner = t.speaker.uid
@@ -156,6 +168,7 @@ class Router:
             self._close("replaced")
         action = ProposedAction(entry[1].name, reply["args"], confirm, t.speaker, (t.archive_id,))
         row = self.bot.archive.add_action(action, int(time.time() * 1000))
+        self.partner, self.replied_ms = t.speaker.uid, int(time.time() * 1000)  # a "oui" said before the question is not a yes
         seconds = self.bot.say(confirm)
         # The waiting time starts once the question has been read out, after the LLM and the voice took their time.
         self.pending = {"action": action, "row": row, "plugin": entry[0], "deadline": now + time.monotonic() - asked + seconds + self.cfg.get("confirm_timeout_s", 20)}

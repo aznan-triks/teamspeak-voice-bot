@@ -65,6 +65,12 @@ class PipelineTest(unittest.TestCase):
         self.assertEqual(rows[1]["server_groups"], ["Guest", "Modo"])
         self.assertEqual((rows[0]["duration_ms"], rows[0]["identity"], rows[0]["text"]), (1000, "Alice", "bonjour"))
 
+    def test_short_merci_is_noise(self):
+        stream = io.BytesIO(frame("utterance", ALICE, ms=700) + frame("utterance", ALICE, ms=2000))
+        archive = Archive(":memory:")
+        serve(stream, lambda pcm: "Merci.", archive, [], CFG)
+        self.assertEqual(archive.export_jsonl(io.StringIO()), 1)  # only the long one is kept
+
     def test_plugin_that_cannot_start_is_skipped(self):
         cfg = {"plugins": {"enabled": ["no_such_plugin", "tsbot.plugins_examples.scoreboard"]}}
         with self.assertLogs("tsbot.plugins", "ERROR"):

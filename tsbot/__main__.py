@@ -5,6 +5,7 @@ import argparse
 import json
 import logging
 import os
+import re
 import signal
 import subprocess
 import sys
@@ -80,7 +81,9 @@ def serve(stream, transcribe, archive: Archive, loaded: list, cfg: dict, bot=Non
         t0 = time.monotonic()
         text = transcribe(pcm)
         stt_ms = int((time.monotonic() - t0) * 1000)
-        if not text:
+        # Canary writes "Merci." for short noises (breath, keyboard): measured on the real channel, 2026-10-25.
+        noise = duration_ms < stt.get("noise_max_ms", 1500) and re.sub(r"\W+", "", text.lower()) in stt.get("noise_phrases", ["merci"])
+        if not text or noise:
             continue
         speaker = to_speaker(cfg, raw)
         archive_id = archive.add(
