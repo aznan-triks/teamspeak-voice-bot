@@ -1,0 +1,41 @@
+# Copy this file to config.toml (git ignores config.toml), then edit it.
+# Passwords do NOT go here: put them in a .env file (see README), as
+# TS_SERVER_PASSWORD and TS_CHANNEL_PASSWORD.
+
+[teamspeak]
+address = "192.168.1.10"                 # server address, optionally with :port (default port 9987)
+nickname = "Voice bot (recording)"       # tell people the bot records
+channel = ""                             # channel path like "Lobby/Games"; empty = the server's default channel
+identity_file = "/data/identity.json"    # created on first start; keep it to keep the bot's TeamSpeak profile
+bridge_binary = "ts-bridge"
+max_utterance_s = 30                     # long speeches are cut into pieces of this length
+
+[stt]
+model = "small"           # tiny | base | small | medium | large-v3-turbo (bigger = better but slower)
+compute_type = "int8"     # int8 = lightest on a CPU
+cpu_threads = 3
+model_dir = "/data/models"
+language = "fr"           # language spoken on your server ("en", "de", ...)
+beam_size = 1             # 1 = fast; 5 = slightly more accurate, about twice as slow
+min_utterance_ms = 400    # shorter sounds are ignored (coughs, clicks)
+max_no_speech_prob = 0.6
+# Words people say on your server (nicknames, game names): helps Whisper spell them.
+vocabulary = "Friends chatting on TeamSpeak."
+
+[archive]
+path = "/data/archive.sqlite3"
+
+[privacy]
+# TeamSpeak UIDs of people who do not want to be transcribed: their voice never reaches Whisper.
+opt_out_uids = []
+
+# Who is speaking. "uid:<UID>" (reliable, one per person) wins over "group:<server group name>".
+[identities]
+# "uid:ExampleUid0aBcDeFgHiJkLmNoPqRs=" = "Alice"
+# "group:Admin" = "Bob"
+
+[plugins]
+enabled = ["tsbot.plugins_examples.echo"]
+
+[plugins."tsbot.plugins_examples.echo"]
+path = "/data/echo.log"

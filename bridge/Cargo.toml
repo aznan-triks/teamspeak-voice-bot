@@ -1,0 +1,21 @@
+[package]
+name = "ts-bridge"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Headless TeamSpeak 3 client: receives voice, decodes it per speaker and writes it to stdout."
+
+[dependencies]
+# tsclientlib has not been republished on crates.io since 0.2.0 (2021): pin the maintained repository.
+tsclientlib = { git = "https://github.com/ReSpeak/tsclientlib", rev = "ee3bc6f", default-features = false, features = ["audio"] }
+tsproto-packets = { git = "https://github.com/ReSpeak/tsclientlib", rev = "ee3bc6f" }
+anyhow = "1"
+futures = "0.3"
+serde_json = "1"
+tokio = { version = "1", features = ["macros", "rt", "signal", "time"] }
+tracing = "0.1"
+tracing-subscriber = "0.3"
+
+[profile.release]
+strip = true
+lto = "thin"

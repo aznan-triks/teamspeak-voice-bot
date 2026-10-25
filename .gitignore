@@ -1,0 +1,9 @@
+bridge/target/
+__pycache__/
+*.pyc
+.venv*/
+config.toml
+.env
+data/
+plugins/*
+!plugins/README.md

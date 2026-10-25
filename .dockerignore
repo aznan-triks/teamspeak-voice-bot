@@ -1,0 +1,8 @@
+.git
+bridge/target
+data
+config.toml
+.env
+tests
+docs
+**/__pycache__
