@@ -222,6 +222,8 @@ async fn main() -> Result<()> {
 		Ok(r) => r?,
 		Err(_) => tracing::warn!("server group list not received: numeric ids are used instead of names"),
 	}
+	// Without it the server only tells about people in the bot's own channel, so it could not follow anyone.
+	con.get_state()?.server.set_subscribed(true).send(&mut con)?;
 
 	// Write from a dedicated thread: a slow orchestrator must never block the network loop.
 	// shortcut: unbounded queue, RAM grows if the orchestrator falls behind; bound it if that happens.

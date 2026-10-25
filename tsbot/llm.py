@@ -25,6 +25,8 @@ class LLM:
         self.timeout = cfg.get("timeout_s", 20)
         self.json_mode = cfg.get("json_mode", True)
         self.extra = cfg.get("extra", {})  # provider options, e.g. DeepSeek: {"reasoning_effort": "low"}
+        if cfg.get("thinking") in ("off", "on"):  # DeepSeek's switch; "auto" sends nothing (other servers)
+            self.extra = {"thinking": {"type": "disabled" if cfg["thinking"] == "off" else "enabled"}, **self.extra}
 
     def _request(self, path: str, body: dict | None = None) -> dict:
         headers = {"Content-Type": "application/json"}

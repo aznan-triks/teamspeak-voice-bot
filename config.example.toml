@@ -17,6 +17,8 @@ join_gap_ms = 1000                       # TeamSpeak cuts the voice at short pau
 model = "nemo-canary-1b-v2"
 language = "fr"
 vocabulary = []           # the group's own words (games, tools...): what sounds like one is spelled like it
+laughs = true             # add "(rires)" when someone laughs (a 10 MB sound tagger, mispeech/ced-mini, ~20 ms a sentence)
+laugh_threshold_pct = 20  # lower = more laughs caught, more false ones
 # To judge another model on real voices: it transcribes the same sounds in the background and the log shows both texts.
 # compare_model = "onnx-community/whisper-large-v3-turbo"
 # compare_threads = 2       # CPU cores it may use
@@ -59,6 +61,7 @@ base_url = "http://host.docker.internal:8080/v1"   # llama.cpp's llama-server, o
 model = "qwen3.5-4b"      # name sent to the server (llama-server ignores it)
 timeout_s = 20
 json_mode = true          # ask for strict JSON; turn off if your provider refuses response_format
+thinking = "auto"         # DeepSeek: "off" answers in ~1 s instead of ~2 s; "auto" sends nothing (other servers)
 wake_words = ["hector"]   # say it to talk to the bot ("Hector, ..."): tested to survive speech-to-text
 confirm_timeout_s = 20    # time to say "oui" or "non" after the bot asks
 max_failures = 3          # failures in a row before degraded mode

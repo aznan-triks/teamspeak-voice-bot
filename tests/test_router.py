@@ -287,5 +287,12 @@ class HelpersTest(unittest.TestCase):
             server.server_close()
 
 
+class ThinkingTest(unittest.TestCase):
+    def test_thinking_switch_is_sent_only_when_chosen(self):
+        self.assertEqual(LLM({"base_url": "x", "thinking": "off"}).extra, {"thinking": {"type": "disabled"}})
+        self.assertEqual(LLM({"base_url": "x", "thinking": "auto"}).extra, {})
+        self.assertEqual(LLM({"base_url": "x"}).extra, {})
+
+
 if __name__ == "__main__":
     unittest.main()

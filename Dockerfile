@@ -1,5 +1,5 @@
 # Stage 1: the Rust bridge (TeamSpeak client + Opus decoding).
-FROM rust:1-bookworm AS bridge
+FROM docker.io/library/rust:1-bookworm AS bridge
 RUN apt-get update && apt-get install -y --no-install-recommends libopus-dev pkg-config \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /src
@@ -7,7 +7,7 @@ COPY bridge/ .
 RUN cargo build --release --locked
 
 # Stage 2: the Python orchestrator (speech-to-text, archive, plugins). Same Debian base as stage 1 (glibc).
-FROM python:3.12-slim-bookworm
+FROM docker.io/library/python:3.12-slim-bookworm
 RUN apt-get update && apt-get install -y --no-install-recommends libopus0 \
     && rm -rf /var/lib/apt/lists/* \
     && useradd --uid 1000 --create-home bot && mkdir /data && chown bot /data

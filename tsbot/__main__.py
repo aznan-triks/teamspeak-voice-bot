@@ -211,7 +211,9 @@ def run(cfg: dict, logs=None) -> None:
             except Exception:
                 ctx = {}
             found += [n for v in ctx.values() if isinstance(v, list) for n in v if isinstance(n, str)]
-        return found + cfg.get("llm", {}).get("wake_words", []) + cfg.get("stt", {}).get("vocabulary", [])
+        # One-word wake words only: "beau top" made "c'est au top" sound like the bot's name.
+        wake = [w for w in cfg.get("llm", {}).get("wake_words", []) if " " not in w.strip()]
+        return found + wake + cfg.get("stt", {}).get("vocabulary", [])
 
     transcribe.names = names
     if cfg.get("web", {}).get("control", True):

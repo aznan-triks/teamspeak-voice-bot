@@ -50,6 +50,9 @@ class NamesTest(unittest.TestCase):
             self.assertEqual(fix_names(heard, self.NAMES), fixed, heard)
         # The group's own words; the short word before one is kept (it used to be swallowed: "sur Claude" → "Claude").
         self.assertEqual(fix_names("Tu vas sur Claude, ça arrive chez Gémini", ["Claude", "Gemini"]), "Tu vas sur Claude, ça arrive chez Gemini")
+        # The bot's name misheard is found again, a common phrase that sounds close is left alone (heard live).
+        self.assertEqual(fix_names("Botob, réponds", ["botop", "bottop"]), "bottop, réponds")
+        self.assertEqual(fix_names("Elle est au top.", ["botop", "bottop"]), "Elle est au top.")
 
 
 class GeminiTest(unittest.TestCase):
@@ -78,6 +81,27 @@ class GeminiTest(unittest.TestCase):
             self.assertEqual(self.stt(pcm), "local")
         finally:
             FakeGemini.fail = False
+
+
+class FakeTagger:
+    def __init__(self, laugh):
+        self.laugh = laugh
+
+    def run(self, _, inputs):
+        import numpy as np
+
+        return [np.array([[0.9] + [0.0] * 15 + [self.laugh] * 6 + [0.0] * 505])]
+
+
+@unittest.skipIf(importlib.util.find_spec("numpy") is None, "numpy is installed in the Docker image")
+class LaughTest(unittest.TestCase):
+    def test_laughter_is_written_only_above_the_threshold(self):
+        stt = Transcriber({"lazy": True, "vad": False, "laughs": True, "laugh_threshold_pct": 20})
+        stt._local, stt.options = FakeLocal(), {}
+        stt._tagger = FakeTagger(0.5)
+        self.assertEqual(stt(b"\x00\x01" * 16000), "local (rires)")
+        stt._tagger = FakeTagger(0.05)
+        self.assertEqual(stt(b"\x00\x01" * 16000), "local")
 
 
 if __name__ == "__main__":

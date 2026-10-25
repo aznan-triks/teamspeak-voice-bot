@@ -91,11 +91,37 @@ class Transcriber:
 
     def local(self):
         if self._local is None:
-            self._local, self.options = self.load(self.cfg.get("model", "nemo-canary-1b-v2"))
+            model, self.options = self.load(self.cfg.get("model", "nemo-canary-1b-v2"))
+            if self.cfg.get("vad", True):
+                import onnx_asr
+
+                # Silero keeps only the speech: a breath or a click no longer comes out as "Merci." (measured), and
+                # never reaches the model. A long minimum silence keeps a joined sentence in one piece.
+                model = model.with_vad(onnx_asr.load_vad("silero"), min_silence_duration_ms=self.cfg.get("vad_split_ms", 2000),
+                                       max_speech_duration_s=30)
+            self._local = model
         return self._local
 
     def __call__(self, pcm: bytes) -> str:
-        return fix_names(self.transcribe(pcm), self.names())
+        text = fix_names(self.transcribe(pcm), self.names())
+        return f"{text} {self.cfg.get('laugh_text', '(rires)')}".strip() if self.laughing(pcm) else text
+
+    def laughing(self, pcm: bytes) -> bool:
+        """The speech model drops laughter: a small sound tagger (CED, AudioSet classes) hears it instead, in ~20 ms."""
+        if not self.cfg.get("laughs"):
+            return False
+        import numpy as np
+
+        if getattr(self, "_tagger", None) is None:
+            import onnxruntime
+            from huggingface_hub import hf_hub_download
+
+            self._tagger = onnxruntime.InferenceSession(hf_hub_download(self.cfg.get("laugh_model", "mispeech/ced-mini"), "model.onnx"))
+        audio = np.frombuffer(pcm, np.int16).astype(np.float32) / 32768.0
+        scores = self._tagger.run(None, {"waveform": audio[None, :]})[0][0]
+        # AudioSet 16-21: laughter, baby laughter, giggle, snicker, belly laugh, chuckle. Measured: real laughs 0.23-0.58,
+        # speech, coughs, typing, clapping 0.00-0.05.
+        return float(scores[16:22].max()) * 100 >= self.cfg.get("laugh_threshold_pct", 20)
 
     def compare(self, pcm: bytes, who: str, text: str) -> None:
         """Optional second model on the same sound, in the background, logged next to the first one's text so both
@@ -137,7 +163,8 @@ class Transcriber:
         import numpy as np
 
         audio = np.frombuffer(pcm, np.int16).astype(np.float32) / 32768.0
-        return self.local().recognize(audio, sample_rate=16000, **self.options).strip()
+        result = self.local().recognize(audio, sample_rate=16000, **self.options)
+        return (result if isinstance(result, str) else " ".join(s.text.strip() for s in result)).strip()
 
     def with_gemini(self, pcm: bytes) -> str:
         buf = io.BytesIO()
