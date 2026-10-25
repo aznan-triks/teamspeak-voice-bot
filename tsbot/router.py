@@ -65,6 +65,7 @@ class Router:
         if cfg.get("personality"):
             self.prompt += "\nPERSONNALITÉ :\n" + cfg["personality"].strip() + "\n"
         self.conversing_until = 0.0  # after the bot answered, people can go on talking to it without its name
+        self.asked_back = False  # its last words were a question ("clarify")
         self.started_at = time.time()  # the bot is asked why it left: it was restarted (updates)
         self.partner, self.replied_ms = None, 0  # who the bot last answered, and when it started saying it (Unix ms)
         self.wake_words = cfg.get("wake_words", ["hector"])
@@ -111,9 +112,10 @@ class Router:
         if addressed:
             plugins.dispatch(self.loaded, "on_command", t)
         # Only the person the bot is talking with may go on without its name: others chatting are left alone.
-        # A lone "Merci." or "Ah." (often noise misheard) does not go on the conversation.
+        # A lone "Merci." or "Ah." (often noise misheard) does not go on the conversation, unless it answers the
+        # bot's own question ("Sur quel top ?" → "Mauvais.").
         self.following = (now < self.conversing_until and t.speaker.uid == self.partner
-                          and len(t.text.split()) >= self.cfg.get("follow_up_min_words", 3))
+                          and (self.asked_back or len(t.text.split()) >= self.cfg.get("follow_up_min_words", 3)))
         spoken_to = addressed or same or self.following
         if not (spoken_to or (self.cfg.get("watch_for_actions") and self.actions)):
             return
@@ -129,18 +131,27 @@ class Router:
             me = f"[{self.bot.me.nickname}] " if self.bot.me else "[bot] "
             mine = [line[len(me):] for line in self.bot.window if line.startswith(me)][-4:]
             if any(repeats(text, s) for s in mine):
-                log.info("repeated answer not said again: %s", text[:80])  # small models say the same thing again
-                return
+                log.info("repeated answer: %s", text[:80])  # small models say the same thing again
+                # Called by name, silence is worse (live: "botop, j'ai pas compris" got nothing four times in a row):
+                # asked once more for something new, and said even if repeated (it was asked to repeat).
+                again = self._ask(now, self.cfg.get("repeat_note", "RÉPÉTITION : tu viens déjà de dire ça. Réponds à la "
+                                  "dernière ligne avec du neuf ; ne le redis que si on te demande de répéter.")) if addressed else None
+                if not (again and again.get("type") in ("answer", "clarify", "explain") and isinstance(again.get("text"), str)):
+                    return
+                kind, text = again["type"], no_relaunch(again["text"]) if again["type"] == "answer" else again["text"]
             self.replied_ms = int(time.time() * 1000)
             seconds = self.bot.say(text)
-            self.conversing_until = now + time.monotonic() - asked + seconds + self.cfg.get("follow_up_s", 30)
+            # After a question of its own, the answer may come without its name, even with follow-ups turned off.
+            self.asked_back = kind == "clarify"
+            wait = max(self.cfg.get("follow_up_s", 30), self.cfg.get("confirm_timeout_s", 20) if self.asked_back else 0)
+            self.conversing_until = now + time.monotonic() - asked + seconds + wait
             self.partner = t.speaker.uid
         elif kind == "propose":
             self._propose(reply, t, now, asked, spoken_to)
         elif kind == "confirm" and same:
             self._finish(reply.get("decision") == "oui")
 
-    def user_message(self) -> str:
+    def user_message(self, note: str = "") -> str:
         """What the LLM gets besides the system prompt: actions, context, pending action, recent lines."""
         contexts = {}
         for p in self.loaded:
@@ -163,12 +174,13 @@ class Router:
             f"BOT : en ligne depuis {int((time.time() - self.started_at) // 60)} min",
             f"CONVERSATION EN COURS : {'oui' if getattr(self, 'following', False) else 'non'}",
             f"APPELÉ PAR SON NOM : {'oui' if getattr(self, 'addressed', False) else 'non'}",
+            *([note] if note else []),
         ])
 
-    def _ask(self, now: float) -> dict | None:
+    def _ask(self, now: float, note: str = "") -> dict | None:
         started = time.time()
         try:
-            reply = self.llm.chat(self.prompt, self.user_message())
+            reply = self.llm.chat(self.prompt, self.user_message(note))
         except Exception as error:
             self._timed(started, False)
             self.failures += 1

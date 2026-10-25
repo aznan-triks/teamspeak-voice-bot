@@ -153,24 +153,49 @@ class RouterTest(unittest.TestCase):
         self.hear(ALICE, "bon on lance la partie", now=100)  # long after: not sent to the LLM
         self.assertEqual(llm.calls, 2)
 
-    def test_the_same_answer_is_never_said_twice(self):
+    def test_a_repeated_answer_is_asked_again_once(self):
         answer = {"type": "answer", "text": "Salut !"}
-        self.setup(FakeLLM(answer, answer))
+        llm = FakeLLM(answer, answer, {"type": "answer", "text": "Oui, je t'entends."})
+        self.setup(llm)
         self.hear(ALICE, "jarvis ça va ?", now=1)
         self.hear(ALICE, "jarvis tu m'entends ?", now=5)
-        self.assertEqual(self.voice.said, ["Salut !"])
+        self.assertIn("RÉPÉTITION", self.router.user_message("RÉPÉTITION"))
+        self.assertEqual((llm.calls, self.voice.said), (3, ["Salut !", "Oui, je t'entends."]))
 
-    def test_an_answer_differing_only_by_punctuation_is_not_said_again(self):
-        self.setup(FakeLLM({"type": "answer", "text": "Ola, je suis là."}, {"type": "answer", "text": "Ola ! Je suis là"}))
+    def test_called_by_name_it_repeats_rather_than_stay_silent(self):
+        # Live 2026-10-25: "botop, j'ai pas compris ce que tu m'as dit" got silence four times in a row.
+        first, again = {"type": "answer", "text": "Ola, je suis là."}, {"type": "answer", "text": "Ola ! Je suis là"}
+        self.setup(FakeLLM(first, again, again))
         self.hear(ALICE, "jarvis ça va ?", now=1)
-        self.hear(ALICE, "jarvis tu m'entends ?", now=5)
-        self.assertEqual(self.voice.said, ["Ola, je suis là."])
+        self.hear(ALICE, "jarvis j'ai pas compris", now=5)
+        self.assertEqual(self.voice.said, ["Ola, je suis là.", "Ola ! Je suis là"])
+
+    def test_without_its_name_a_repeat_is_not_said(self):
+        answer = {"type": "answer", "text": "Salut !"}
+        llm = FakeLLM(answer, answer)
+        self.setup(llm)
+        self.router.cfg["follow_up_s"] = 30
+        self.hear(ALICE, "jarvis ça va ?", now=1)
+        self.hear(ALICE, "et toi tu vas bien", now=5)
+        self.assertEqual((llm.calls, self.voice.said), (2, ["Salut !"]))
+
+    def test_the_answer_to_its_own_question_needs_no_name(self):
+        # Live 2026-10-25: "Bigfoot sur quel top ?" then "Mauvais." went unheard (follow-ups set to 0 s).
+        llm = FakeLLM({"type": "clarify", "text": "Sur quel top ?"}, PROPOSE)
+        self.setup(llm)
+        self.router.cfg["follow_up_s"] = 0
+        self.hear(ALICE, "jarvis un point pour Bob", now=1)
+        self.hear(ALICE, "Mauvais.", now=5)
+        self.assertEqual(self.voice.said, ["Sur quel top ?", "Un point pour Bob, je valide ?"])
+        self.hear(BOB, "Mauvais.", now=6)  # only the person who was asked
+        self.assertEqual(llm.calls, 2)
 
     def test_same_answer_in_other_words_and_relaunch_questions(self):
         # Real exchange of 2026-10-25: the same answer three times, each ending with a question to relaunch.
         self.setup(FakeLLM(
             {"type": "answer", "text": "Mammouth est le premier Scatophile avec 54 points. Et toi, tu es quoi dans ce classement ?"},
             {"type": "answer", "text": "Le premier Scatophile, c'est Mammouth avec 54 points. Quant à toi, Ilker, tu es où ?"},
+            {"type": "ignore"},  # asked again for something new: nothing to add
             {"type": "clarify", "text": "Tu parles de qui ?"}))
         self.hear(ALICE, "jarvis c'est qui le premier Scatophile ?", now=1)
         self.hear(ALICE, "jarvis c'est à toi que je parlais", now=5)

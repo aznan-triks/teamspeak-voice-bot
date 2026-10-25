@@ -96,9 +96,10 @@ class Transcriber:
                 import onnx_asr
 
                 # Silero keeps only the speech: a breath or a click no longer comes out as "Merci." (measured), and
-                # never reaches the model. A long minimum silence keeps a joined sentence in one piece.
+                # never reaches the model. A long minimum silence keeps a joined sentence in one piece. The default
+                # 30 ms margin cut soft first sounds live ("botop, je t'ai parlé" heard as "Top, je t'ai parlé").
                 model = model.with_vad(onnx_asr.load_vad("silero"), min_silence_duration_ms=self.cfg.get("vad_split_ms", 2000),
-                                       max_speech_duration_s=30)
+                                       max_speech_duration_s=30, speech_pad_ms=self.cfg.get("vad_pad_ms", 250))
             self._local = model
         return self._local
 
