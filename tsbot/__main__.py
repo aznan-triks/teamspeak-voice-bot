@@ -86,7 +86,11 @@ def serve(stream, transcribe, archive: Archive, loaded: list, cfg: dict, bot=Non
         if duration_ms < stt.get("min_utterance_ms", 400):
             continue
         with lock:
-            heard(header, raw, pcm, duration_ms, transcribe, archive, loaded, cfg, bot, router)
+            try:
+                heard(header, raw, pcm, duration_ms, transcribe, archive, loaded, cfg, bot, router)
+            except Exception:
+                log.exception("this sentence could not be handled")  # one bad sentence stopped the whole bot live
+
 
 
 def heard(header: dict, raw: dict, pcm: bytes, duration_ms: int, transcribe, archive, loaded, cfg, bot, router) -> None:

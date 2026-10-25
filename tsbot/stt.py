@@ -122,10 +122,16 @@ class Transcriber:
 
             self._tagger = onnxruntime.InferenceSession(hf_hub_download(self.cfg.get("laugh_model", "mispeech/ced-mini"), "model.onnx"))
         audio = np.frombuffer(pcm, np.int16).astype(np.float32) / 32768.0
-        scores = self._tagger.run(None, {"waveform": audio[None, :]})[0][0]
-        # AudioSet 16-21: laughter, baby laughter, giggle, snicker, belly laugh, chuckle. Measured: real laughs 0.23-0.58,
-        # speech, coughs, typing, clapping 0.00-0.05.
-        return float(scores[16:22].max()) * 100 >= self.cfg.get("laugh_threshold_pct", 20)
+        step = 10 * 16000  # CED-mini takes 10 s at most (12 s failed live and stopped the bot)
+        try:
+            # AudioSet 16-21: laughter, baby laughter, giggle, snicker, belly laugh, chuckle. Measured: real laughs
+            # 0.23-0.58, speech, coughs, typing, clapping 0.00-0.05.
+            best = max(float(self._tagger.run(None, {"waveform": audio[None, i:i + step]})[0][0][16:22].max())
+                       for i in range(0, max(len(audio) - 3200, 1), step))  # a last bit under 0.2 s is skipped
+        except Exception:
+            log.exception("laughter detection failed")  # never stop listening because of it
+            return False
+        return best * 100 >= self.cfg.get("laugh_threshold_pct", 20)
 
     def compare(self, pcm: bytes, who: str, text: str) -> None:
         """Optional second model on the same sound, in the background, logged next to the first one's text so both

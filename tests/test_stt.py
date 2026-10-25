@@ -90,6 +90,8 @@ class FakeTagger:
     def run(self, _, inputs):
         import numpy as np
 
+        if inputs["waveform"].shape[1] > 10 * 16000:
+            raise RuntimeError("CED-mini fails beyond 10 s")
         return [np.array([[0.9] + [0.0] * 15 + [self.laugh] * 6 + [0.0] * 505])]
 
 
@@ -104,6 +106,9 @@ class LaughTest(unittest.TestCase):
         self.assertEqual(stt(b"\x00\x01" * 16000), "local")
         stt._tagger, stt.cfg["noise_phrases"] = FakeTagger(0.5), ["local"]  # a laugh alone, heard as "Merci."
         self.assertEqual(stt(b"\x00\x01" * 16000), "(rires)")
+        self.assertEqual(stt(b"\x00\x01" * 16000 * 25), "(rires)")  # 25 s: read 10 s at a time (crashed the bot live)
+        stt._tagger.run = lambda *_: 1 / 0
+        self.assertEqual(stt(b"\x00\x01" * 16000), "local")  # a failing tagger never stops the transcription
 
 
 if __name__ == "__main__":
