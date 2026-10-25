@@ -7,13 +7,54 @@ told the names and nicknames to expect; the audio then leaves this machine. If G
 from __future__ import annotations
 
 import base64
+import difflib
 import io
 import logging
 import os
+import re
+import unicodedata
 import wave
 
 log = logging.getLogger(__name__)
 GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/openai"
+
+
+def sound_key(word: str) -> str:
+    """Rough French spelling-to-sound key: "IP-Cos", "Ipkoz" and "ipcos" all give "ipkos"."""
+    w = unicodedata.normalize("NFKD", word.lower()).encode("ascii", "ignore").decode()
+    w = re.sub(r"[^a-z]", "", w)
+    for a, b in (("ph", "f"), ("qu", "k"), ("ck", "k"), ("c", "k"), ("q", "k"), ("z", "s"), ("y", "i"), ("dj", "j"), ("h", "")):
+        w = w.replace(a, b)
+    return re.sub(r"(.)\1+", r"\1", w)  # doubled letters sound like one
+
+
+def fix_names(text: str, names) -> str:
+    """Replace words that sound like a known name or nickname ("Bajel" -> "BaJell") with its real spelling."""
+    keys = {sound_key(n): n for n in names if n and len(sound_key(n)) >= 4}
+    if not keys:
+        return text
+    words = re.findall(r"[\w'-]+|\W+", text)
+    out, i = [], 0
+    while i < len(words):
+        best = None
+        for size in (1, 2):  # a single word first; then "IP Cos", one name heard as two words
+            chunk = words[i:i + 2 * size - 1]
+            if len(chunk) < 2 * size - 1 or not chunk[0].strip() or (size == 2 and (not chunk[-1].strip() or chunk[1] != " ")):
+                continue
+            key = sound_key("".join(chunk))
+            if len(key) < 4:
+                continue
+            match = difflib.get_close_matches(key, keys, n=1, cutoff=0.8)
+            if match:
+                best = (keys[match[0]], 2 * size - 1)
+                break
+        if best:
+            out.append(best[0])
+            i += best[1]
+        else:
+            out.append(words[i])
+            i += 1
+    return "".join(out)
 
 
 class Transcriber:
@@ -42,6 +83,9 @@ class Transcriber:
         return self._local
 
     def __call__(self, pcm: bytes) -> str:
+        return fix_names(self.transcribe(pcm), self.names())
+
+    def transcribe(self, pcm: bytes) -> str:
         if self.cloud is not None:
             try:
                 return self.with_gemini(pcm)

@@ -5,7 +5,7 @@ import threading
 import unittest
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
-from tsbot.stt import Transcriber
+from tsbot.stt import Transcriber, fix_names
 
 
 class FakeGemini(BaseHTTPRequestHandler):
@@ -31,6 +31,23 @@ class FakeGemini(BaseHTTPRequestHandler):
 class FakeLocal:
     def recognize(self, audio, sample_rate, **options):
         return "local"
+
+
+class NamesTest(unittest.TestCase):
+    NAMES = ["BaJell", "IPKOZ", "Ilker", "botop", "Bob"]
+
+    def test_misheard_nicknames_get_their_real_spelling(self):
+        cases = {
+            "Wesh Bajel, tu lances la game ou quoi?": "Wesh BaJell, tu lances la game ou quoi?",
+            "Wesh Badjell, tu lances ?": "Wesh BaJell, tu lances ?",
+            "IP-Cos, il a encore rageé.": "IPKOZ, il a encore rageé.",
+            "IP Cos il a encore ragé": "IPKOZ il a encore ragé",
+            "c'est Ilker qui m'a tué, pas Ipekaos.": "c'est Ilker qui m'a tué, pas IPKOZ.",
+            "Ouais, grave. TKT, je gère.": "Ouais, grave. TKT, je gère.",  # nothing close: unchanged
+            "il a pris le bobsleigh": "il a pris le bobsleigh",  # short names are left alone
+        }
+        for heard, fixed in cases.items():
+            self.assertEqual(fix_names(heard, self.NAMES), fixed, heard)
 
 
 class GeminiTest(unittest.TestCase):
