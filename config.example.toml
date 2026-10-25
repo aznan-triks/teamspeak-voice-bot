@@ -11,7 +11,10 @@ bridge_binary = "ts-bridge"
 max_utterance_s = 30                     # long speeches are cut into pieces of this length
 
 [stt]
-# NVIDIA Parakeet TDT 0.6B v3: 25 European languages, detected automatically.
+# NVIDIA Canary-1B-v2 with the language forced: "euh", "ouais" and laughs stay French.
+# "nemo-parakeet-tdt-0.6b-v3" is a bit faster but guesses the language (short sounds often come out as English).
+model = "nemo-canary-1b-v2"
+language = "fr"
 min_utterance_ms = 400    # shorter sounds are ignored (coughs, clicks)
 
 [archive]
@@ -31,7 +34,8 @@ opt_out_uids = []
 engine = "phonon"         # "phonon" (best French voice, see README "A better voice"), falls back to "piper" by itself
 language = "fr"
 phonon_model = "hf://gradium/phonon-40m-fr"
-# phonon_voice = "Tiphaine"
+phonon_voices_dir = "/data/voices"   # extra voices: <name>.safetensors from huggingface.co/gradium/phonon-voices
+# phonon_voice = "lucien"            # a file name from that folder; empty = the model's default (female) voice
 piper_voice = "fr_FR-siwis-medium"
 piper_dir = "/data/models/piper"
 cache_dir = "/data/tts_cache"   # every sentence is generated once, then replayed from here
@@ -51,6 +55,11 @@ wake_words = ["hector"]   # say it to talk to the bot ("Hector, ..."): tested to
 confirm_timeout_s = 20    # time to say "oui" or "non" after the bot asks
 max_failures = 3          # failures in a row before degraded mode
 warm_up = true            # read the prompt once at start: the first question is answered much faster
+follow_up_s = 30          # after the bot answers, people can go on talking to it this long without its name
+# The bot's character, in the language it speaks (French here). It sets the tone, never the rules.
+personality = """Tu es le pote un peu chambreur du groupe : drôle, direct, jamais méchant. Tu tutoies tout le monde,
+tu parles comme un joueur, tu as des avis tranchés sur les jeux et tu aimes taquiner le dernier du classement.
+Quand on te demande un service, tu le rends sans faire d'histoires."""
 probe_interval_s = 300    # in degraded mode, check the LLM again this often
 prompt_file = "prompts/system_fr.txt"
 

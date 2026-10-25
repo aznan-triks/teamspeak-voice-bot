@@ -5,6 +5,7 @@ const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "
 const $ = (sel, root = document) => root.querySelector(sel);
 const main = $("#main");
 let me = null;
+let BOT = "Bot"; // the bot's name, from its TeamSpeak nickname
 let timer = null; // the current page's refresh loop
 
 async function api(path, body) {
@@ -55,7 +56,9 @@ const STATUS = { proposed: "en attente", replaced: "remplacée", cancelled: "ann
 // ---- Frame: menu, lamp, theme ----
 
 const PAGES = {
+  conversation: { title: "Conversation", render: pageConversation },
   phrases: { title: "Mes phrases", render: pagePhrases },
+  services: { title: "Services", render: pageServices, admin: true },
   actions: { title: "Actions", render: pageActions },
   live: { title: "En direct", render: pageLive, admin: true },
   speak: { title: "Faire parler", render: pageSpeak, admin: true },
@@ -69,11 +72,11 @@ const PAGES = {
 function drawRail() {
   const link = (id) => `<a href="#/${id}" data-page="${id}">${PAGES[id].title}</a>`;
   $("#rail").innerHTML = `
-    <div class="brand">${avatar("Hector")}<div><strong>Hector</strong><small>Gestion du bot</small></div></div>
-    ${me.admin ? `<div class="group">Le bot</div>${["live", "speak", "logs", "stats"].map(link).join("")}
+    <div class="brand">${avatar(BOT)}<div><strong>${esc(BOT)}</strong><small>Gestion du bot</small></div></div>
+    ${me.admin ? `<div class="group">Le bot</div>${["live", "services", "speak", "logs", "stats"].map(link).join("")}
       <div class="group">Configuration</div>${["settings", "people", "plugins"].map(link).join("")}
       <div class="group">Pour tous</div>` : ""}
-    ${["phrases", "actions"].map(link).join("")}
+    ${["conversation", "phrases", "actions"].map(link).join("")}
     <div class="who">${avatar(me.identity || me.nickname)}<div><strong>${esc(me.identity || me.nickname)}</strong>${me.admin ? "Administrateur" : "Membre"}<br><a href="#" id="logout">Se déconnecter</a></div></div>`;
   $("#logout").onclick = async (e) => {
     e.preventDefault();
@@ -90,7 +93,7 @@ function setLamp(state, text) {
 }
 
 async function refreshLamp() {
-  if (!me?.admin) return setLamp("listening", "Hector");
+  if (!me?.admin) return setLamp("listening", BOT);
   try {
     const s = await api("/api/state");
     const talking = s.speaking.some((x) => Date.now() - x.ms < 3000);
@@ -125,10 +128,11 @@ async function applyNow() {
 
 async function show() {
   clearInterval(timer);
-  const id = location.hash.replace("#/", "") || (me.admin ? "live" : "phrases");
-  const page = PAGES[id] && (!PAGES[id].admin || me.admin) ? id : (me.admin ? "live" : "phrases");
+  const home = me.admin ? "live" : "conversation";
+  const id = location.hash.replace("#/", "") || home;
+  const page = PAGES[id] && (!PAGES[id].admin || me.admin) ? id : home;
   document.querySelectorAll("#rail a[data-page]").forEach((a) => (a.dataset.page === page ? a.setAttribute("aria-current", "page") : a.removeAttribute("aria-current")));
-  document.title = `${PAGES[page].title} — Hector`;
+  document.title = `${PAGES[page].title} — ${BOT}`;
   $("#rail").classList.remove("open");
   $("#menu-toggle").setAttribute("aria-expanded", "false");
   main.innerHTML = "";
@@ -141,41 +145,56 @@ async function show() {
 
 async function pageLogin() {
   $("#rail").hidden = true;
-  setLamp("listening", "Hector");
+  setLamp("listening", BOT);
   main.innerHTML = `<section class="login">
-    <div class="row" style="margin-bottom:12px">${avatar("Hector")}<h1 style="margin:0">Gestion d'Hector</h1></div>
-    <p class="lede">Choisis ton pseudo : Hector t'envoie un code en message privé sur TeamSpeak. Tu dois être connecté au serveur.</p>
-    <div class="panel stack" id="login-box"><p class="muted">Liste des personnes connectées…</p></div></section>`;
+    <div class="row" style="margin-bottom:12px">${avatar(BOT)}<h1 style="margin:0">Connexion</h1></div>
+    <p class="lede">Sois connecté au serveur TeamSpeak, choisis ton pseudo : ${esc(BOT)} t'envoie un code. Il apparaît dans une fenêtre au milieu de TeamSpeak (un « poke ») et dans tes messages privés.</p>
+    <div class="panel stack" id="login-box"><p class="muted">Recherche des personnes connectées…</p></div></section>`;
   const box = $("#login-box");
-  let people;
-  try { people = await api("/api/login/clients"); } catch (e) {
-    box.innerHTML = `<p class="bad">${esc(e.message)}</p><button class="btn" onclick="location.reload()">Réessayer</button>`;
-    return;
-  }
-  if (!people.length) {
-    box.innerHTML = `<p>Personne n'est connecté au serveur TeamSpeak pour l'instant. Connecte-toi, puis recharge cette page.</p><button class="btn" onclick="location.reload()">Recharger</button>`;
-    return;
-  }
-  box.innerHTML = `<label for="who">Ton pseudo sur TeamSpeak</label>
-    <select id="who">${people.map((p) => `<option value="${p.client_id}">${esc(p.nickname)}</option>`).join("")}</select>
-    <button class="btn primary" id="send">Recevoir mon code</button>`;
-  $("#send").onclick = async () => {
-    const id = Number($("#who").value);
+  const choose = async () => {
+    let people;
+    try { people = await api("/api/login/clients"); } catch (e) {
+      box.innerHTML = `<p class="bad">${esc(e.message)}</p><p class="muted">Nouvel essai automatique dans quelques secondes.</p>`;
+      return;
+    }
+    if (!people.length) {
+      box.innerHTML = `<p>Personne n'est connecté au serveur TeamSpeak. Connecte-toi : ton pseudo apparaîtra ici tout seul.</p>`;
+      return;
+    }
+    const picked = $("#who")?.value;
+    box.innerHTML = `<label for="who">Ton pseudo sur TeamSpeak</label>
+      <select id="who">${people.map((p) => `<option value="${p.client_id}">${esc(p.nickname)}</option>`).join("")}</select>
+      <button class="btn primary" id="send">Recevoir mon code</button>
+      <p class="muted">Tu ne te vois pas ? Vérifie que tu es connecté au bon serveur : la liste se met à jour toute seule.</p>`;
+    if (picked && people.some((p) => String(p.client_id) === picked)) $("#who").value = picked;
+    $("#send").onclick = () => send(Number($("#who").value), $("#who").selectedOptions[0].textContent);
+  };
+  const send = async (id, name) => {
+    clearInterval(timer);
     try {
       const r = await api("/api/login/start", { client_id: id });
-      box.innerHTML = `<p>Code envoyé en message privé sur TeamSpeak. Il reste valable ${Math.round(r.ttl_s / 60)} minutes.</p>
-        <label for="code">Code reçu</label>
-        <input id="code" class="code-input" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6">
-        <div class="row"><button class="btn primary" id="go">Se connecter</button><button class="btn ghost" onclick="location.reload()">Changer de pseudo</button></div>`;
+      box.innerHTML = `<p><strong>Code envoyé à ${esc(name)}.</strong> Regarde TeamSpeak : une fenêtre s'est ouverte avec le code (valable ${Math.round(r.ttl_s / 60)} minutes). Le plus simple : dans tes messages privés TeamSpeak, clique sur le lien envoyé par ${esc(BOT)}.</p>
+        <label for="code">Code à 6 chiffres</label>
+        <input id="code" class="code-input" type="text" inputmode="numeric" autocomplete="one-time-code">
+        <div class="row"><button class="btn primary" id="go">Se connecter</button><button class="btn ghost" id="again">Renvoyer un code</button><button class="btn ghost" id="other">Changer de pseudo</button></div>`;
       $("#code").focus();
       const go = async () => {
         try { await api("/api/login/finish", { client_id: id, code: $("#code").value }); location.reload(); }
-        catch (e) { toast(e.message, true); }
+        catch (e) { toast(e.message, true); $("#code").select(); }
       };
       $("#go").onclick = go;
-      $("#code").onkeydown = (e) => e.key === "Enter" && go();
+      // Typing or pasting the whole TeamSpeak message both work: the 6 digits are picked out of it.
+      $("#code").oninput = (e) => {
+        const found = e.target.value.match(/\d{6}/);
+        e.target.value = found ? found[0] : e.target.value.replace(/\D/g, "").slice(0, 6);
+        if (found) go();
+      };
+      $("#again").onclick = () => send(id, name);
+      $("#other").onclick = () => { choose(); timer = setInterval(choose, 5000); };
     } catch (e) { toast(e.message, true); }
   };
+  await choose();
+  timer = setInterval(() => { if (!$("#code")) choose(); }, 5000);
 }
 
 // ---- Member pages ----
@@ -188,7 +207,7 @@ async function pagePhrases() {
   const load = async (reset) => {
     if (reset) { last = 0; $("#list").innerHTML = ""; }
     const rows = await api(`/api/my/phrases?q=${encodeURIComponent($("#q").value)}&before_id=${last}`);
-    if (reset && !rows.length) $("#list").innerHTML = `<p class="empty">Aucune phrase${$("#q").value ? " avec ce mot" : " pour l'instant : parle dans le salon où se trouve Hector"}.</p>`;
+    if (reset && !rows.length) $("#list").innerHTML = `<p class="empty">Aucune phrase${$("#q").value ? " avec ce mot" : " pour l'instant : parle dans le salon où se trouve ${esc(BOT)}"}.</p>`;
     $("#list").insertAdjacentHTML("beforeend", rows.map((r) => `<div class="line">${avatar(me.identity || me.nickname)}<div class="who">${esc(me.identity || me.nickname)}<time>${when(r.started_ms)}, durée ${secs(r.duration_ms)}</time></div><p class="said">${esc(r.text)}</p></div>`).join(""));
     if (rows.length) last = rows[rows.length - 1].id;
     $("#more").hidden = rows.length < 50;
@@ -202,7 +221,7 @@ async function pagePhrases() {
 async function pageActions() {
   main.innerHTML = `<h1>Actions</h1><p class="lede">Chaque demande faite à la voix : qui l'a demandée, ce qui a été proposé, et ce qui s'est passé.${me.admin ? "" : " La phrase d'origine n'est visible que pour tes propres demandes."}</p><div id="list"></div>`;
   const rows = await api("/api/actions");
-  if (!rows.length) return ($("#list").innerHTML = `<p class="empty">Aucune action pour l'instant. Dis « Hector, … » dans le salon pour en demander une.</p>`);
+  if (!rows.length) return ($("#list").innerHTML = `<p class="empty">Aucune action pour l'instant. Dis « ${esc(BOT)}, … » dans le salon pour en demander une.</p>`);
   $("#list").innerHTML = `<table class="table responsive"><thead><tr><th>Quand</th><th>Qui</th><th>Demande</th><th>Résultat</th></tr></thead><tbody>
     ${rows.map((a) => `<tr><td>${when(a.created_ms)}</td><td>${esc(a.identity || "?")}</td>
       <td><strong>${esc(a.name.endsWith(".add_points") ? "Ajout de points" : a.name)}</strong> ${esc(Object.entries(a.args).map(([k, v]) => `${k} : ${v}`).join(", "))}
@@ -213,12 +232,87 @@ async function pageActions() {
 
 // ---- Admin pages ----
 
-async function pageLive() {
-  main.innerHTML = `<h1>En direct</h1><p class="lede">Qui est dans le salon, qui parle, et ce que le bot entend.</p>
-    <dl class="facts" id="facts"></dl>
-    <div class="split"><section class="panel"><h2>Ce que le bot entend</h2><div id="lines" class="subtitles"></div></section>
-    <section class="panel"><h2>Dans le salon</h2><ul class="people" id="people"></ul></section></div>`;
+// The conversation as this person could hear it: only sentences said while they were in the bot's channel,
+// headset on. Returns a function that draws the new sentences; call it on every refresh.
+function conversationFeed(list, status) {
+  let last = 0;
+  let first = true;
+  return async () => {
+    const [rows, presence] = await Promise.all([api(`/api/conversation?after_id=${last}`), api("/api/presence")]);
+    status.className = "hearing " + (presence.hearing ? "on" : "off");
+    status.innerHTML = presence.hearing
+      ? "Tu entends le salon : ce qui s'y dit s'affiche ici."
+      : `${esc(presence.reason)} Tu ne vois que ce que tu pouvais entendre : rien de nouveau ne s'affiche tant que tu n'écoutes pas le salon.`;
+    if (first && !rows.length) list.innerHTML = `<p class="empty">Rien pour l'instant. Rejoins le salon de ${esc(BOT)}, casque actif, et la conversation s'affichera ici.</p>`;
+    if (!rows.length) return;
+    if (first || last === 0) list.innerHTML = "";
+    first = false;
+    const atBottom = list.scrollHeight - list.scrollTop - list.clientHeight < 60;
+    list.insertAdjacentHTML("beforeend", rows.map((r) => `<div class="line${r.name && r.name.startsWith(BOT) ? " bot" : ""}">${avatar(r.name)}
+      <div class="who">${esc(r.name)}<time>${when(r.started_ms)}</time></div><p class="said">${esc(r.text)}</p></div>`).join(""));
+    last = rows[rows.length - 1].id;
+    if (atBottom) list.scrollTop = list.scrollHeight;
+  };
+}
+
+async function pageConversation() {
+  main.innerHTML = `<h1>Conversation</h1><p class="lede">Ce que ${esc(BOT)} a entendu dans son salon pendant que tu y étais, casque actif. Ce que tu ne pouvais pas entendre n'apparaît jamais.</p>
+    <p id="hearing" class="hearing"></p><section class="panel"><div id="lines" class="subtitles"></div></section>`;
+  const draw = conversationFeed($("#lines"), $("#hearing"));
+  await draw();
+  timer = setInterval(draw, 2000);
+}
+
+const SERVICE_LABEL = { llm: "Modèle de langage (réflexion des réponses)", tsbot: "Bot (écoute, transcription, voix)", web: "Ce site" };
+const SERVICE_STATE = { active: "en marche", activating: "démarre", deactivating: "s'arrête", inactive: "arrêté", failed: "en panne" };
+
+async function pageServices() {
+  main.innerHTML = `<h1>Services</h1><p class="lede">Les trois programmes qui font tourner ${esc(BOT)} sur le NUC. Ils redémarrent tout seuls au démarrage de la machine.</p>
+    <div id="services" class="stack"></div>`;
+  const open = new Set();
   const draw = async () => {
+    let list;
+    try { list = await api("/api/services"); } catch (e) { $("#services").innerHTML = `<p class="bad">${esc(e.message)}</p>`; return; }
+    if (!list.length) { $("#services").innerHTML = `<p class="empty">Aucun service déclaré ([web] services dans la configuration).</p>`; return; }
+    const logs = {};
+    await Promise.all([...open].map(async (n) => { logs[n] = await api(`/api/services/logs?name=${encodeURIComponent(n)}&lines=150`).catch(() => []); }));
+    $("#services").innerHTML = list.map((s) => `<section class="panel stack" data-service="${esc(s.name)}">
+      <div class="row"><span class="lamp-dot ${s.active === "active" ? "on" : s.active === "failed" ? "down" : ""}"></span>
+        <div><strong>${esc(SERVICE_LABEL[s.name] || s.name)}</strong><div class="muted">${esc(SERVICE_STATE[s.active] || s.active)}${s.active === "active" && s.since ? `, depuis le ${when(Number(s.since.replace("@", "")) * 1000)}` : ""}${Number(s.restarts) ? `, ${esc(s.restarts)} redémarrage(s) automatique(s)` : ""}</div></div>
+        <div class="row" style="margin-left:auto">
+          ${s.active === "active" ? "" : `<button class="btn primary" data-act="start">Démarrer</button>`}
+          <button class="btn" data-act="restart">Redémarrer</button>
+          ${s.active === "active" && s.name !== "web" ? `<button class="btn danger" data-act="stop">Arrêter</button>` : ""}
+          <button class="btn ghost" data-logs>${open.has(s.name) ? "Masquer le journal" : "Voir le journal"}</button></div></div>
+      ${open.has(s.name) ? `<div class="logs" style="height:40vh">${(logs[s.name] || []).map((l) => `<div class="${/error|failed|traceback/i.test(l) ? "ERROR" : /warn/i.test(l) ? "WARNING" : ""}">${esc(l)}</div>`).join("") || "Journal vide."}</div>` : ""}
+    </section>`).join("");
+    document.querySelectorAll(".logs").forEach((b) => (b.scrollTop = b.scrollHeight));
+    document.querySelectorAll("[data-service]").forEach((sec) => {
+      const name = sec.dataset.service;
+      sec.querySelector("[data-logs]").onclick = () => { open.has(name) ? open.delete(name) : open.add(name); draw(); };
+      sec.querySelectorAll("[data-act]").forEach((b) => (b.onclick = async () => {
+        const act = b.dataset.act;
+        const what = { start: "Démarrer", stop: "Arrêter", restart: "Redémarrer" }[act];
+        const warn = name === "web" ? " Le site se recharge dans quelques secondes." : name === "tsbot" ? " Le bot quitte le salon pendant environ une minute." : "";
+        if (act !== "start" && !(await confirmBox(`${what} « ${SERVICE_LABEL[name] || name} » ?${warn}`, what))) return;
+        try { await api("/api/services", { name, action: act }); toast(`${what} : demandé.`); }
+        catch (e) { toast(e.message, true); }
+        setTimeout(draw, name === "web" ? 4000 : 1500);
+      }));
+    });
+  };
+  await draw();
+  timer = setInterval(draw, 5000);
+}
+
+async function pageLive() {
+  main.innerHTML = `<h1>En direct</h1><p class="lede">L'état du bot, qui est dans son salon et qui parle. La conversation n'apparaît que si tu peux l'entendre toi-même.</p>
+    <dl class="facts" id="facts"></dl>
+    <div class="split"><section class="panel"><h2>Conversation</h2><p id="hearing" class="hearing"></p><div id="lines" class="subtitles"></div></section>
+    <section class="panel"><h2>Dans le salon</h2><ul class="people" id="people"></ul></section></div>`;
+  const feed = conversationFeed($("#lines"), $("#hearing"));
+  const draw = async () => {
+    feed().catch(() => {});
     const s = await refreshLamp();
     if (!s) return ($("#facts").innerHTML = `<div><dt>Bot</dt><dd class="bad">ne répond pas</dd></div>`);
     const fact = (k, v, cls = "") => `<div><dt>${k}</dt><dd class="${cls}">${v}</dd></div>`;
@@ -227,14 +321,6 @@ async function pageLive() {
       + fact("Voix", esc(s.voice || "pas encore utilisée"))
       + fact("Plugins", s.plugins.length ? esc(s.plugins.join(", ")) : "aucun")
       + fact("Démarré", ago(s.started_ms));
-    const lines = $("#lines");
-    const atBottom = lines.scrollHeight - lines.scrollTop - lines.clientHeight < 40;
-    const bot = s.me?.nickname;
-    lines.innerHTML = s.lines.length ? s.lines.map((l) => {
-      const m = l.match(/^\[(.*?)\] (.*)$/s) || [null, "?", l];
-      return `<div class="line${m[1] === bot ? " bot" : ""}">${avatar(m[1])}<div class="who">${esc(m[1])}</div><p class="said">${esc(m[2])}</p></div>`;
-    }).join("") : `<p class="empty">Rien entendu depuis le démarrage.</p>`;
-    if (atBottom) lines.scrollTop = lines.scrollHeight;
     const channel = s.me?.channel_id;
     const here = s.clients.filter((c) => c.channel_id === channel && c.client_id !== s.me?.client_id);
     const talking = new Set(s.speaking.filter((x) => Date.now() - x.ms < 3000).map((x) => x.client_id));
@@ -283,7 +369,9 @@ async function pageSettings() {
     let control;
     if (f.type === "bool") return `<div class="field" data-key="${f.section}.${f.key}" data-type="bool"><label class="switch"><input type="checkbox" id="${id}" ${v ? "checked" : ""}>${esc(f.label)}</label>${f.help ? `<p class="help">${esc(f.help)}</p>` : ""}</div>`;
     if (f.type === "list") control = `<textarea id="${id}">${esc((v || []).join("\n"))}</textarea>`;
+    else if (f.type === "text") control = `<textarea id="${id}" rows="5">${esc(v ?? "")}</textarea>`;
     else if (f.type.startsWith("choice:")) control = `<select id="${id}">${f.type.slice(7).split(",").map((o) => `<option ${o === v ? "selected" : ""}>${esc(o)}</option>`).join("")}</select>`;
+    else if (f.type === "secret") control = `<input id="${id}" type="password" autocomplete="new-password" value="${esc(v ?? "")}" placeholder="Aucun">`;
     else control = `<input id="${id}" type="${f.type === "int" ? "number" : "text"}" ${f.type === "int" ? 'min="0"' : ""} value="${esc(v ?? "")}" placeholder="${esc(f.default ?? "")}">`;
     return `<div class="field" data-key="${f.section}.${f.key}" data-type="${f.type}"><label for="${id}">${esc(f.label)}</label>${f.help ? `<p class="help">${esc(f.help)}</p>` : ""}${control}</div>`;
   };
@@ -468,6 +556,15 @@ $(".stage").addEventListener("click", () => {
 });
 
 (async () => {
+  try { BOT = (await api("/api/info")).name; } catch {}
+  // Login link sent in TeamSpeak: ?login=<client>-<code> logs in with one click.
+  const link = new URLSearchParams(location.search).get("login");
+  if (link) {
+    const [client, code] = link.split("-");
+    history.replaceState(null, "", "/");
+    try { await api("/api/login/finish", { client_id: Number(client), code }); }
+    catch (e) { toast(`${e.message} Redemande un code.`, true); }
+  }
   try { me = await api("/api/me"); } catch { return pageLogin(); }
   drawRail();
   window.addEventListener("hashchange", show);

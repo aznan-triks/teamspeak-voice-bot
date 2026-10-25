@@ -147,6 +147,10 @@ legend { font-size: 16px; font-weight: 600; color: var(--strong); padding: 0; ma
 .line .said { margin: 0; font-size: 14px; }
 .line.bot .who { color: var(--menu-text); }
 .empty { color: var(--muted); padding: 20px 0; }
+.hearing { margin: 0 0 12px; padding: 8px 12px; border-radius: var(--radius-s); font-size: 14px; border-left: 3px solid var(--muted); background: var(--panel-2); }
+.hearing.on { border-left-color: var(--talk); }
+.hearing.off { border-left-color: var(--warn); }
+.lamp-dot.on { background: var(--talk); } .lamp-dot.down { background: var(--bad); }
 
 /* People in the channel, like client rows in the server tree */
 .people { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }

@@ -40,6 +40,9 @@ class Router:
     def __init__(self, cfg: dict, llm, bot, loaded: list):
         self.cfg, self.llm, self.bot, self.loaded = cfg, llm, bot, loaded
         self.prompt = Path(cfg.get("prompt_file", "prompts/system_fr.txt")).read_text(encoding="utf-8")
+        if cfg.get("personality"):
+            self.prompt += "\nPERSONNALITÉ :\n" + cfg["personality"].strip() + "\n"
+        self.conversing_until = 0.0  # after the bot answered, people can go on talking to it without its name
         self.wake_words = cfg.get("wake_words", ["hector"])
         self.wake = re.compile(r"\b(" + "|".join(map(re.escape, self.wake_words)) + r")\b", re.I)
         self.actions: dict = {}
@@ -74,7 +77,9 @@ class Router:
             return self._finish(False)
         if addressed:
             plugins.dispatch(self.loaded, "on_command", t)
-        if not (addressed or same):
+        # Only the person the bot is talking with may go on without its name: others chatting are left alone.
+        self.following = now < self.conversing_until and t.speaker.uid == getattr(self, "partner", None)
+        if not (addressed or same or self.following):
             return
         asked = time.monotonic()
         reply = self._ask(now)
@@ -82,7 +87,9 @@ class Router:
             return
         kind = reply.get("type")
         if kind in ("answer", "clarify", "explain") and isinstance(reply.get("text"), str):
-            self.bot.say(reply["text"])
+            seconds = self.bot.say(reply["text"])
+            self.conversing_until = now + time.monotonic() - asked + seconds + self.cfg.get("follow_up_s", 30)
+            self.partner = t.speaker.uid
         elif kind == "propose":
             self._propose(reply, t, now, asked)
         elif kind == "confirm" and same:
@@ -107,6 +114,8 @@ class Router:
             "CONTEXTE :", json.dumps({"bot": me, "mots_d_eveil": self.wake_words, **contexts}, ensure_ascii=False),
             "EN ATTENTE :", json.dumps(pending, ensure_ascii=False),
             "TRANSCRIPTION :", *self.bot.window,
+            # Last: a line that changes after the transcription keeps the LLM's cache of what comes before.
+            f"CONVERSATION EN COURS : {'oui' if getattr(self, 'following', False) else 'non'}",
         ])
 
     def _ask(self, now: float) -> dict | None:

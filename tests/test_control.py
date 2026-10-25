@@ -55,7 +55,7 @@ class ControlTest(unittest.TestCase):
         self.assertEqual(self.call("POST", "/say", body={"text": "Bonjour"}), (200, {"seconds": 1.5}))
         self.assertEqual(self.call("POST", "/say", body={"text": " "})[0], 400)
         self.call("POST", "/message", body={"client_id": 4, "text": "Code : 123456"})
-        self.assertEqual(self.voice.sent, [{"cmd": "message", "client_id": 4, "text": "Code : 123456"}])
+        self.assertEqual(self.voice.sent, [{"cmd": "message", "client_id": 4, "text": "Code : 123456", "poke": False}])
         self.logs.emit(logging.LogRecord("x", logging.INFO, "", 0, "un", None, None))
         self.logs.emit(logging.LogRecord("x", logging.INFO, "", 0, "deux", None, None))
         status, lines = self.call("GET", "/logs", {"after": ["1"]})

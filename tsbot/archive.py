@@ -17,7 +17,8 @@ CREATE TABLE IF NOT EXISTS utterances (
     server_groups TEXT,
     channel_id    INTEGER,
     text          TEXT NOT NULL,
-    stt_ms        INTEGER
+    stt_ms        INTEGER,
+    listeners     TEXT
 );
 CREATE TABLE IF NOT EXISTS actions (
     id            INTEGER PRIMARY KEY,
@@ -46,6 +47,9 @@ class Archive:
         self.db.row_factory = sqlite3.Row
         self.db.execute("PRAGMA journal_mode=WAL")
         self.db.executescript(SCHEMA)
+        # Archives made before 2026-10-25 lack this column: their sentences stay visible to their author only.
+        if "listeners" not in {r[1] for r in self.db.execute("PRAGMA table_info(utterances)")}:
+            self.db.execute("ALTER TABLE utterances ADD COLUMN listeners TEXT")
 
     def _insert(self, table: str, row: dict) -> int:
         cols = ", ".join(row)
@@ -56,6 +60,8 @@ class Archive:
 
     def add(self, **row) -> int:
         row["server_groups"] = json.dumps(list(row.get("server_groups") or []), ensure_ascii=False)
+        # Who could hear it (in the bot's channel, sound on): the only people who may read it later.
+        row["listeners"] = json.dumps(list(row.get("listeners") or []))
         return self._insert("utterances", row)
 
     def add_action(self, action, created_ms: int) -> int:

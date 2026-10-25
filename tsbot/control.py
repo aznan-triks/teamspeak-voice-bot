@@ -86,7 +86,6 @@ class Control:
             "me": asdict(me) if me else None,
             "clients": self.state.clients,
             "speaking": list(self.state.speaking),
-            "lines": list(self.bot.window),
             "llm": None if self.router is None else {"degraded": self.router.degraded, "pending": bool(self.router.pending)},
             "voice": self.voice.engine,
             "plugins": [type(p).__module__ for p in self.loaded],
@@ -112,7 +111,7 @@ class Control:
                 return 400, "text/plain", b"text is required"
             return ok({"seconds": self.bot.say(text)})
         if method == "POST" and path == "/message":
-            self.voice.send({"cmd": "message", "client_id": int(body["client_id"]), "text": str(body["text"])})
+            self.voice.send({"cmd": "message", "client_id": int(body["client_id"]), "text": str(body["text"]), "poke": bool(body.get("poke"))})
             return ok({"sent": True})
         if method == "POST" and path == "/restart":
             # The bot quits cleanly; Restart=always (systemd) or restart: unless-stopped (compose) starts it again.

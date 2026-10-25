@@ -20,7 +20,7 @@ TYPES = {".html": "text/html; charset=utf-8", ".css": "text/css", ".js": "text/j
 COOKIE = "tsbot_session"
 
 
-def route(app: App, method: str, path: str, query: dict, body: dict, user: dict | None):
+def route(app: App, method: str, path: str, query: dict, body: dict, user: dict | None, site_url: str = ""):
     """Returns (status, content type, bytes, cookie or None)."""
     one = lambda name, default="": query.get(name, [default])[0]
 
@@ -28,10 +28,12 @@ def route(app: App, method: str, path: str, query: dict, body: dict, user: dict 
         return 200, "application/json", json.dumps(data, ensure_ascii=False).encode(), cookie
 
     # Open to everyone: logging in.
+    if method == "GET" and path == "/api/info":
+        return ok({"name": app.bot_name()})
     if method == "GET" and path == "/api/login/clients":
         return ok(app.login_clients())
     if method == "POST" and path == "/api/login/start":
-        return ok(app.login_start(int(body.get("client_id", 0))))
+        return ok(app.login_start(int(body.get("client_id", 0)), site_url))
     if method == "POST" and path == "/api/login/finish":
         session, cookie = app.login_finish(int(body.get("client_id", 0)), str(body.get("code", "")))
         return ok(session, cookie)
@@ -45,6 +47,10 @@ def route(app: App, method: str, path: str, query: dict, body: dict, user: dict 
         return ok(user)
     if method == "GET" and path == "/api/my/phrases":
         return ok(app.my_phrases(user["uid"], one("q"), int(one("before_id", "0")), int(one("limit", "50"))))
+    if method == "GET" and path == "/api/conversation":
+        return ok(app.conversation(user["uid"], int(one("after_id", "0"))))
+    if method == "GET" and path == "/api/presence":
+        return ok(app.presence(user["uid"]))
     if method == "GET" and path == "/api/actions":
         return ok(app.actions(user["uid"], user["admin"], int(one("before_id", "0")), int(one("limit", "50"))))
     if not user["admin"]:
@@ -69,6 +75,12 @@ def route(app: App, method: str, path: str, query: dict, body: dict, user: dict 
         return ok(app.save_settings(body))
     if method == "POST" and path == "/api/plugins/test":
         return ok(app.test_plugin(str(body.get("name", ""))))
+    if method == "GET" and path == "/api/services":
+        return ok(app.service_list())
+    if method == "POST" and path == "/api/services":
+        return ok(app.service_action(str(body.get("name", "")), str(body.get("action", ""))))
+    if method == "GET" and path == "/api/services/logs":
+        return ok(app.service_logs(one("name"), int(one("lines", "200"))))
     if method == "GET" and path == "/api/stats":
         return ok(app.stats(int(one("days", "30"))))
     raise HttpError(404, "Page inconnue.")
@@ -90,7 +102,8 @@ def make_handler(app: App):
                         raise HttpError(415, "JSON attendu.")
                     size = int(self.headers.get("Content-Length") or 0)
                     body = json.loads(self.rfile.read(size) or b"{}") if size else {}
-                status, kind, data, new_cookie = route(app, method, url.path, parse_qs(url.query), body, user)
+                host = self.headers.get("Host", "")
+                status, kind, data, new_cookie = route(app, method, url.path, parse_qs(url.query), body, user, f"http://{host}" if host else "")
             except HttpError as error:
                 status, kind, data, new_cookie = error.status, "application/json", json.dumps({"error": str(error)}, ensure_ascii=False).encode(), None
             except Exception as error:

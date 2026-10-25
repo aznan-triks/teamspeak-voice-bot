@@ -3,7 +3,8 @@
 //! Joins a server, receives the channel's voice, decodes it per speaker (Opus → PCM) and writes
 //! each utterance to stdout: one JSON line, then `samples` × 2 bytes of 16-bit PCM, 16 kHz, mono.
 //! Reads `{"cmd":"play","samples":N}` + N samples of 16-bit PCM, 48 kHz, mono on stdin and says
-//! them in the channel; `{"cmd":"message","client_id":N,"text":"..."}` sends a private text message;
+//! them in the channel; `{"cmd":"message","client_id":N,"text":"...","poke":true}` sends a private text
+//! message (and a poke, which pops up in the client);
 //! `{"cmd":"clients"}` answers with the list of connected clients. Private messages to the bot become
 //! `{"event":"text"}` lines. Logs go to stderr.
 //! Full protocol: docs/ARCHITECTURE.md §3.
@@ -31,7 +32,7 @@ const SEND_FRAME: usize = 48_000 / 50;
 
 enum Command {
 	Play(Vec<i16>),
-	Message(u16, String),
+	Message(u16, String, bool),
 	Clients,
 }
 
@@ -49,6 +50,7 @@ fn read_commands(commands: Sender<Command>) -> Result<()> {
 			Some("message") => Command::Message(
 				cmd["client_id"].as_u64().unwrap_or(0) as u16,
 				cmd["text"].as_str().unwrap_or("").to_string(),
+				cmd["poke"].as_bool().unwrap_or(false),
 			),
 			Some("clients") => Command::Clients,
 			other => {
@@ -106,7 +108,20 @@ fn speaker(con: &Connection, id: u16) -> Value {
 		"nickname": c.name,
 		"server_groups": groups,
 		"channel_id": c.channel.0,
+		"hearing": !c.output_muted && c.output_hardware_enabled, // headset on, sound not muted
 	})
+}
+
+/// UIDs of the people who could hear the channel right now: in the bot's channel, sound on.
+fn listeners(con: &Connection) -> Vec<String> {
+	let Ok(state) = con.get_state() else { return Vec::new() };
+	let Some(channel) = state.clients.get(&state.own_client).map(|me| me.channel) else { return Vec::new() };
+	state
+		.clients
+		.values()
+		.filter(|c| c.id != state.own_client && c.channel == channel && !c.output_muted && c.output_hardware_enabled)
+		.filter_map(|c| c.uid.as_ref().map(|u| u.to_string()))
+		.collect()
 }
 
 #[tokio::main(flavor = "current_thread")]
@@ -196,10 +211,19 @@ async fn main() -> Result<()> {
 				for command in commands.try_iter() {
 					match command {
 						Command::Play(samples) => to_say.extend(samples),
-						Command::Message(id, text) => {
-							let msg = con.get_state()?.clients.get(&ClientId(id)).map(|c| c.send_textmessage(&text));
-							match msg {
-								Some(msg) => msg.send(&mut con)?,
+						Command::Message(id, text, poke) => {
+							// A poke pops up in the middle of the client: hard to miss, unlike a private chat.
+							let msgs = con.get_state()?.clients.get(&ClientId(id)).map(|c| {
+								let short: String = text.chars().take(100).collect(); // pokes are limited to 100 characters
+								(c.send_textmessage(&text), poke.then(|| c.poke(&short)))
+							});
+							match msgs {
+								Some((msg, poke)) => {
+									msg.send(&mut con)?;
+									if let Some(poke) = poke {
+										poke.send(&mut con)?;
+									}
+								}
 								None => tracing::warn!(id, "message not sent: client not found"),
 							}
 						}
@@ -246,6 +270,7 @@ async fn main() -> Result<()> {
 							"speaker": s.who,
 							"started_ms": s.started_ms as u64,
 							"samples": s.pcm.len(),
+							"listeners": listeners(&con), // who may read it later: those who could hear it
 						});
 						emit(&out, header, &s.pcm);
 					}

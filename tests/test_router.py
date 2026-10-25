@@ -138,6 +138,24 @@ class RouterTest(unittest.TestCase):
         self.router.start(now=0)  # a failed warm-up is not a failure of the bot
         self.assertEqual((llm.calls, self.router.degraded, self.router.failures), (2, False, 0))
 
+    def test_people_can_go_on_talking_without_the_name(self):
+        answer = {"type": "answer", "text": "Salut !"}
+        llm = FakeLLM(answer, {"type": "ignore"})
+        self.setup(llm)
+        self.router.cfg["follow_up_s"] = 30
+        self.hear(ALICE, "jarvis ça va ?", now=1)
+        self.hear(BOB, "Alice tu lances ?", now=5)  # someone else chatting: left alone
+        self.assertEqual(llm.calls, 1)
+        self.hear(ALICE, "et toi t'en penses quoi", now=10)  # the same person, within 30 s: the LLM decides
+        self.assertIn("CONVERSATION EN COURS : oui", self.router.user_message())
+        self.hear(ALICE, "bon on lance la partie", now=100)  # long after: not sent to the LLM
+        self.assertEqual(llm.calls, 2)
+
+    def test_personality_is_added_to_the_prompt(self):
+        self.setup(FakeLLM())
+        router = Router({"wake_words": ["jarvis"], "personality": "Tu es drôle."}, FakeLLM(), self.bot, [])
+        self.assertTrue(router.prompt.endswith("PERSONNALITÉ :\nTu es drôle.\n"))
+
     def test_correction_with_wake_word_goes_to_the_llm(self):
         llm = FakeLLM(PROPOSE, dict(PROPOSE, args={"player": "Alice", "points": 2}, confirm_text="Deux points pour Alice ?"))
         self.setup(llm)

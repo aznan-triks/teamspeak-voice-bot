@@ -92,6 +92,9 @@ class Voice:
                 import ptts
 
                 self._phonon = ptts.TTS(self.cfg.get("phonon_model", PHONON_MODEL), lang=self.cfg.get("language", "fr"))
+                # Extra voices: <name>.safetensors files from the gradium/phonon-voices catalogue, used by their name.
+                for path in sorted(Path(self.cfg.get("phonon_voices_dir", "data/voices")).glob("*.safetensors")):
+                    self._phonon.add_voice(path.stem, str(path))
                 self.engine = "phonon"
             except Exception as error:  # gated model not accepted yet, no HF_TOKEN, no network...
                 log.warning("Phonon unavailable, using Piper instead (%s). See README, 'A better voice'.", str(error)[:200])
@@ -111,6 +114,7 @@ class Bot:
     def __init__(self, voice: Voice | None, archive, window: int = 20):
         self.voice, self.archive, self.me = voice, archive, None
         self.window, self.size = [], window
+        self.channel_id, self.listeners = None, []  # who can hear the bot right now
 
     def heard(self, t) -> None:
         self._remember(f"[{t.speaker.identity or t.speaker.nickname}] {t.text}")
@@ -138,7 +142,7 @@ class Bot:
             self.archive.add(
                 started_ms=int(time.time() * 1000), duration_ms=int(seconds * 1000), client_id=self.me.client_id,
                 uid=self.me.uid, nickname=self.me.nickname, identity=None, server_groups=self.me.server_groups,
-                channel_id=None, text=text, stt_ms=None,
+                channel_id=self.channel_id, text=text, stt_ms=None, listeners=self.listeners,
             )
         log.info("[%s] %s", name, text)
         return seconds

@@ -54,6 +54,9 @@ def serve(stream, transcribe, archive: Archive, loaded: list, cfg: dict, bot=Non
     opt_out = set(cfg.get("privacy", {}).get("opt_out_uids", []))
     for header, pcm in read_frames(stream):
         raw = header.get("speaker", {})
+        if header["event"] == "clients" and bot is not None and bot.me is not None:
+            bot.listeners = [c["uid"] for c in header.get("clients", []) if c.get("uid") and c.get("hearing")
+                             and c.get("channel_id") == bot.channel_id and c.get("client_id") != bot.me.client_id]
         if state is not None and header["event"] in ("clients", "speaking"):
             state.on_event(header["event"], header, lambda r: to_speaker(cfg, r))
             continue
@@ -64,7 +67,7 @@ def serve(stream, transcribe, archive: Archive, loaded: list, cfg: dict, bot=Non
             me = to_speaker(cfg, raw)
             log.info("connected as %s (uid %s)", me.nickname, me.uid)
             if bot:
-                bot.me = me
+                bot.me, bot.channel_id = me, raw.get("channel_id")
             plugins.dispatch(loaded, "on_ready", me)
             if router:
                 router.start()
@@ -84,7 +87,10 @@ def serve(stream, transcribe, archive: Archive, loaded: list, cfg: dict, bot=Non
             started_ms=header.get("started_ms", 0), duration_ms=duration_ms, client_id=speaker.client_id,
             uid=speaker.uid, nickname=speaker.nickname, identity=speaker.identity,
             server_groups=speaker.server_groups, channel_id=raw.get("channel_id"), text=text, stt_ms=stt_ms,
+            listeners=header.get("listeners", []),
         )
+        if bot:
+            bot.listeners = header.get("listeners", bot.listeners)
         log.info("[%s] %s  (%d ms audio, %d ms STT)", speaker.identity or speaker.nickname, text, duration_ms, stt_ms)
         t = Transcription(archive_id, speaker, header.get("started_ms", 0), duration_ms, text)
         if bot:
@@ -104,7 +110,10 @@ def spawn_bridge(ts: dict) -> subprocess.Popen:
     })
     if ts.get("channel"):
         env["TS_CHANNEL"] = ts["channel"]
-    # Passwords only come from environment variables (TS_SERVER_PASSWORD, TS_CHANNEL_PASSWORD).
+    # Passwords: from the site's settings if set there, otherwise from the environment (.env).
+    for key, var in (("server_password", "TS_SERVER_PASSWORD"), ("channel_password", "TS_CHANNEL_PASSWORD")):
+        if ts.get(key):
+            env[var] = ts[key]
     return subprocess.Popen([ts.get("bridge_binary", "ts-bridge")], stdin=subprocess.PIPE, stdout=subprocess.PIPE, env=env)
 
 
