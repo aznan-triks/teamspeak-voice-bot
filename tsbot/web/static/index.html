@@ -6,32 +6,42 @@
   <title>Gestion du bot</title>
   <link rel="stylesheet" href="/app.css">
   <script>
-    // Theme before first paint: no flash of the wrong colours.
-    try { const t = localStorage.getItem("theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) {}
+    // Theme and language before first paint: avoid flash of incorrect theme or language.
+    try {
+      const t = localStorage.getItem("theme");
+      if (t) document.documentElement.dataset.theme = t;
+      const l = localStorage.getItem("lang") || (navigator.language && navigator.language.startsWith("en") ? "en" : "fr");
+      document.documentElement.lang = l;
+    } catch (e) {}
   </script>
 </head>
 <body>
-  <a class="skip" href="#main">Aller au contenu</a>
+  <a class="skip" href="#main" id="skip-link">Aller au contenu</a>
   <div id="app" class="app">
     <nav id="rail" class="rail" aria-label="Menu principal"></nav>
     <div class="stage">
-      <header class="topbar">
+      <header class="topbar" role="banner">
         <button id="menu-toggle" class="icon-btn only-mobile" aria-label="Ouvrir le menu" aria-expanded="false" aria-controls="rail">☰</button>
-        <div id="lamp" class="lamp" role="status" aria-live="polite"><span class="lamp-dot"></span><span class="lamp-text">Connexion…</span></div>
+        <div id="lamp" class="lamp" role="status" aria-live="polite">
+          <span class="lamp-dot" aria-hidden="true"></span>
+          <span class="lamp-text">Connexion…</span>
+        </div>
         <div class="topbar-end">
-          <button id="theme-toggle" class="icon-btn" aria-label="Changer de thème">◐</button>
+          <button id="lang-toggle" class="icon-btn text-btn" aria-label="Changer de langue" title="Français / English">FR</button>
+          <button id="theme-toggle" class="icon-btn" aria-label="Changer de thème" title="Changer de thème">◐</button>
         </div>
       </header>
-      <div id="banner" class="banner" hidden></div>
+      <div id="banner" class="banner" role="region" aria-label="Avertissement" hidden></div>
       <main id="main" class="main" tabindex="-1"></main>
     </div>
   </div>
   <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
-  <dialog id="confirm" class="confirm">
+  <div id="tooltip" class="tooltip" role="tooltip" aria-hidden="true" hidden></div>
+  <dialog id="confirm" class="confirm" aria-labelledby="confirm-text">
     <form method="dialog">
       <p id="confirm-text"></p>
       <div class="row-end">
-        <button value="cancel" class="btn ghost">Annuler</button>
+        <button value="cancel" class="btn ghost" id="confirm-cancel">Annuler</button>
         <button value="ok" id="confirm-ok" class="btn primary">Confirmer</button>
       </div>
     </form>
