@@ -30,7 +30,7 @@ DEFAULT_PHRASES = {
 
 
 def decode(path: Path) -> bytes:
-    """Any audio file → 16-bit PCM, 48 kHz, mono (PyAV comes with faster-whisper)."""
+    """Any audio file → 16-bit PCM, 48 kHz, mono (PyAV)."""
     import av
 
     out = bytearray()

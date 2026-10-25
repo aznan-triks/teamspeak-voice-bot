@@ -64,8 +64,8 @@ What `execute()` is responsible for: checking that the person may do this, makin
 
 ## Examples
 
-- `tsbot/plugins_examples/echo.py`: appends every sentence to a file (listening only).
 - `tsbot/plugins_examples/scoreboard.py`: a voice action that adds points in a JSON file. Start from this one to connect a real application.
+- The README shows a listening-only plugin in five lines.
 
 Your own plugins go in the `plugins/` folder: `docker-compose.yml` mounts it and adds it to `PYTHONPATH`.
 

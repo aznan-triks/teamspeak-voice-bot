@@ -42,13 +42,13 @@ teamspeak-voice-bot/
 ├── bridge/src/main.rs        Rust bridge: hearing and speaking
 ├── tsbot/
 │   ├── __main__.py           main loop, bridge protocol, identities, CLI (run, export, say)
-│   ├── stt.py                Parakeet v3 (onnx-asr) or faster-whisper
+│   ├── stt.py                Parakeet v3 (onnx-asr)
 │   ├── voice.py              Voice (files, Phonon, Piper, cache) and Bot (say + remember)
 │   ├── llm.py                OpenAI-compatible client (urllib, no SDK)
 │   ├── router.py             wake word, LLM, confirmation, degraded mode
 │   ├── archive.py            SQLite: utterances + actions, JSON lines export
 │   ├── plugins.py            plugin contract types, loading, isolation
-│   └── plugins_examples/     echo.py (v1 hooks), scoreboard.py (voice action)
+│   └── plugins_examples/     scoreboard.py (voice action example)
 ├── prompts/system_fr.txt     LLM system prompt (French, see prompts/README.md)
 ├── docs/                     this file, PLUGIN_CONTRACT.md
 ├── tests/                    unit tests (no server, model or LLM needed)
@@ -74,7 +74,7 @@ teamspeak-voice-bot/
 
 ## 4. Choices, with the evidence behind them (October 2026)
 
-### Speech-to-text: Parakeet TDT 0.6B v3 by default, faster-whisper as an option
+### Speech-to-text: Parakeet TDT 0.6B v3
 
 Measured on 3 CPU cores, 6 French sentences (Windows voices), int8:
 
@@ -84,7 +84,7 @@ Measured on 3 CPU cores, 6 French sentences (Windows voices), int8:
 | Whisper small (faster-whisper) | 3.2× real time | "Et beau", "Ali" for "Alice", "à nul" |
 | Whisper base | 8.3× real time | "alli", more errors on names |
 
-Parakeet is as fast as Whisper small and slightly more accurate here. It also avoids two Whisper problems seen live: made-up sentences on silence, and repetition loops (a 1 s clip once took 7.6 s). Whisper stays available because it handles any language and accepts a vocabulary prompt.
+Parakeet is as fast as Whisper small and slightly more accurate here. It also avoids two Whisper problems seen live: made-up sentences on silence, and repetition loops (a 1 s clip once took 7.6 s). Whisper was removed: its only extras were non-European languages and a vocabulary prompt, which this bot does not need.
 
 Rejected: **Qwen3-ASR 0.6B**. It needs PyTorch or vLLM with a GPU (no CPU-friendly runtime), and its model card shows it behind Whisper large-v3 on 3 of 4 multilingual benchmarks.
 

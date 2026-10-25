@@ -11,18 +11,8 @@ bridge_binary = "ts-bridge"
 max_utterance_s = 30                     # long speeches are cut into pieces of this length
 
 [stt]
-engine = "parakeet"       # "parakeet" (NVIDIA Parakeet TDT v3: 25 European languages, no made-up sentences on silence)
-                          # or "whisper" (any language, understands the vocabulary list below)
+# NVIDIA Parakeet TDT 0.6B v3: 25 European languages, detected automatically.
 min_utterance_ms = 400    # shorter sounds are ignored (coughs, clicks)
-# Whisper only:
-model = "small"           # tiny | base | small | medium | large-v3-turbo (bigger = better but slower)
-compute_type = "int8"
-cpu_threads = 3
-model_dir = "/data/models"
-language = "fr"
-beam_size = 1
-max_no_speech_prob = 0.6
-vocabulary = "Friends chatting on TeamSpeak."   # nicknames and game names people say
 
 [archive]
 path = "/data/archive.sqlite3"
@@ -64,7 +54,8 @@ probe_interval_s = 300    # in degraded mode, check the LLM again this often
 prompt_file = "prompts/system_fr.txt"
 
 [plugins]
-enabled = ["tsbot.plugins_examples.echo"]
+enabled = []              # e.g. ["tsbot.plugins_examples.scoreboard", "my_plugin"]
 
-[plugins."tsbot.plugins_examples.echo"]
-path = "/data/echo.log"
+# [plugins."tsbot.plugins_examples.scoreboard"]
+# players = ["Alice", "Bob"]
+# games = ["Fléchettes", "Rocket League"]

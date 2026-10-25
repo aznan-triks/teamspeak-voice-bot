@@ -13,7 +13,7 @@ Everything below was tested on a real TeamSpeak server (October 2026).
 | Joins a TeamSpeak 3 server (TeamSpeak 6 servers work too) | small Rust client built on [tsclientlib](https://github.com/ReSpeak/tsclientlib) |
 | Hears each person separately, cuts speech into sentences | TeamSpeak already sends one voice stream per person |
 | Knows who is talking | TeamSpeak UID or server group → a name you choose |
-| Speech-to-text (French by default) | [NVIDIA Parakeet TDT 0.6B v3](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3), or [faster-whisper](https://github.com/SYSTRAN/faster-whisper) |
+| Speech-to-text (25 European languages) | [NVIDIA Parakeet TDT 0.6B v3](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3) |
 | Saves everything (SQLite), exports to JSON lines | built in |
 | You talk to it with a wake word ("Hector, ...") | any OpenAI-compatible LLM; tested with [llama.cpp](https://github.com/ggml-org/llama.cpp) + Qwen3.5-4B |
 | Every action is confirmed out loud first | "yes" / "no" from the same person |
@@ -176,10 +176,9 @@ docker compose exec tsbot python -m tsbot export > archive.jsonl
 - A **UID** is unique to one person: use it whenever you can. You can read someone's UID in the exported archive, or in TeamSpeak (right-click the person → Client Info).
 - A **server group** works too, but only if that person is alone in the group.
 
-### Speech-to-text: which engine?
+### Speech-to-text
 
-- `engine = "parakeet"` (default): NVIDIA Parakeet TDT 0.6B v3, 25 European languages. It does not make up sentences on silence, which Whisper sometimes does. About 1 s per sentence on 3 CPU cores; the whole bot uses about 1 GB of RAM.
-- `engine = "whisper"`: any language, and it accepts a `vocabulary` list (nicknames, game names) to spell them better. Use `model = "base"` on a slow machine.
+NVIDIA Parakeet TDT 0.6B v3 understands 25 European languages and detects the language by itself. About 1 s per sentence on 3 CPU cores; the whole bot uses about 1 GB of RAM. It cannot be taught nicknames: if a name keeps coming out wrong, the LLM usually still matches it to the right person (it corrected "Bobe" to "Bob" in our tests).
 
 ## Write a plugin
 

@@ -1,11 +1,10 @@
-"""Bridge → filters → archive → plugins, without TeamSpeak or Whisper. Run: `python -m unittest discover -s tests`."""
+"""Bridge → filters → archive → plugins, without TeamSpeak or a speech model. Run: `python -m unittest discover -s tests`."""
 import io
 import json
 import unittest
 
 from tsbot.__main__ import resolve_identity, serve
 from tsbot.archive import Archive
-from tsbot.stt import is_hallucination
 
 
 def frame(event, speaker, ms=0):
@@ -72,10 +71,6 @@ class PipelineTest(unittest.TestCase):
     def test_identity_uid_wins_over_group(self):
         self.assertEqual(resolve_identity(CFG, "alice=", ["Modo"]), "Alice")
         self.assertIsNone(resolve_identity(CFG, "zed=", ["Guest"]))
-
-    def test_hallucinations(self):
-        self.assertTrue(is_hallucination("Sous-titres réalisés par la communauté d'Amara.org"))
-        self.assertFalse(is_hallucination("on lance la partie"))
 
 
 if __name__ == "__main__":
