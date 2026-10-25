@@ -117,6 +117,8 @@ The first start downloads the model (about 2.7 GB). It uses about 3 GB of RAM.
 
 `-ub 128 -cms 64` matter on a small CPU: Qwen3.5 can only reuse what it already read from saved checkpoints, and these two options save them often. On an Intel i5-1135G7 (4 cores), a follow-up question takes 5 to 8 seconds instead of 11 to 16.
 
+A small PC with an Intel graphics chip can do better: use the `ghcr.io/ggml-org/llama.cpp:server-vulkan` image, add `--device /dev/dri` and `-ngl 99`. On the same i5-1135G7 it reads requests twice as fast; in a busy channel the average answer went from 14 to 7 seconds. With rootless Podman, the user needs the `render` group and the `crun` runtime with `--group-add keep-groups` (the default `runc` drops that group).
+
 ### 2. Point the bot to it
 
 In `config.toml`, section `[llm]`:
