@@ -82,7 +82,7 @@ FIELDS = [
     ("teamspeak", "channel", "str", "Salon", "Chemin du salon, par exemple « Jeux/Soirée ». Vide = salon par défaut du serveur."),
     ("teamspeak", "max_utterance_s", "int", "Découpe des longues prises de parole (s)", "Au-delà, une prise de parole est coupée en morceaux de cette durée."),
     ("teamspeak", "join_gap_ms", "int", "Recoller les bouts de phrase (ms)", "TeamSpeak coupe la voix à chaque petite pause : deux morceaux plus proches que ce délai forment une seule phrase. Plus grand = phrases plus complètes, bot un peu plus lent à réagir."),
-    ("stt", "model", "choice:nemo-canary-1b-v2,nemo-parakeet-tdt-0.6b-v3", "Moteur de transcription", "Canary : langue imposée, garde « euh », « ouais » et les rires en français. Parakeet : un peu plus rapide, mais devine la langue et transforme souvent les sons courts en anglais."),
+    ("stt", "model", "choice:nemo-canary-1b-v2,nemo-parakeet-tdt-0.6b-v3", "Moteur de transcription", "Canary : langue imposée, garde « euh » et « ouais » en français (les rires sont repérés à part). Parakeet : un peu plus rapide, mais devine la langue et transforme souvent les sons courts en anglais."),
     ("stt", "vocabulary", "list", "Mots propres au groupe", "Noms de jeux, d'outils, surnoms… Un mot qui sonne pareil dans la transcription est remplacé par la bonne orthographe (« Gémini » → Gemini). Les pseudos et noms de joueurs y sont déjà. Un par ligne."),
     ("stt", "laughs", "bool", "Repérer les rires", "Ajoute « (rires) » à la phrase quand quelqu'un rit (petit détecteur de sons sur le NUC, rien ne sort)."),
     ("stt", "laugh_threshold_pct", "int", "Sensibilité aux rires (%)", "Plus bas = plus de rires repérés, mais quelques faux. Mesuré : vrais rires 23 à 58, parole, toux, clavier 0 à 5."),

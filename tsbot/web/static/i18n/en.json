@@ -274,7 +274,7 @@
   "field.teamspeak.join_gap_ms.label": "Utterance Stitch Gap (ms)",
   "field.teamspeak.join_gap_ms.help": "TeamSpeak stops voice transmission on brief pauses: chunks separated by less than this interval form one continuous sentence. Larger = more complete sentences, slightly slower bot response.",
   "field.stt.model.label": "Speech-to-Text Model",
-  "field.stt.model.help": "Canary: forced language, preserves filler words, laughs, and French expressions. Parakeet: slightly faster, but guesses language and often misidentifies short sounds as English.",
+  "field.stt.model.help": "Canary: forced language, keeps filler words and French expressions (laughter is detected separately). Parakeet: slightly faster, but guesses language and often misidentifies short sounds as English.",
   "field.stt.vocabulary.label": "Custom Vocabulary",
   "field.stt.vocabulary.help": "Names of games, tools, nicknames… Words sounding similar are corrected to the right spelling ('Gémini' → Gemini). Player names and nicknames are already included. One per line.",
   "field.stt.laughs.label": "Detect Laughter",

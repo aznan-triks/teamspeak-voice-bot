@@ -274,7 +274,7 @@
   "field.teamspeak.join_gap_ms.label": "Recoller les bouts de phrase (ms)",
   "field.teamspeak.join_gap_ms.help": "TeamSpeak coupe la voix à chaque petite pause : deux morceaux plus proches que ce délai forment une seule phrase. Plus grand = phrases plus complètes, bot un peu plus lent à réagir.",
   "field.stt.model.label": "Moteur de transcription",
-  "field.stt.model.help": "Canary : langue imposée, garde « euh », « ouais » et les rires en français. Parakeet : un peu plus rapide, mais devine la langue et transforme souvent les sons courts en anglais.",
+  "field.stt.model.help": "Canary : langue imposée, garde « euh » et « ouais » en français (les rires sont repérés à part). Parakeet : un peu plus rapide, mais devine la langue et transforme souvent les sons courts en anglais.",
   "field.stt.vocabulary.label": "Mots propres au groupe",
   "field.stt.vocabulary.help": "Noms de jeux, d'outils, surnoms… Un mot qui sonne pareil dans la transcription est remplacé par la bonne orthographe (« Gémini » → Gemini). Les pseudos et noms de joueurs y sont déjà. Un par ligne.",
   "field.stt.laughs.label": "Repérer les rires",
