@@ -156,8 +156,11 @@ docker compose run --rm tsbot python -m tsbot say "Bonjour tout le monde"
 
 ## Manage the bot from a web page
 
-The bot comes with a management site, in French, styled like the TeamSpeak 6 client. Start it next to the bot (`docker compose up -d` starts both), then open `http://THIS-MACHINE:8095` from your home network.
+The bot comes with a lightweight, offline management site styled like the TeamSpeak 6 client (light and dark themes). Start it next to the bot (`docker compose up -d` starts both), then open `http://THIS-MACHINE:8095` from your home network.
 
+- **Multilingual**: French by default and English, with automatic browser language detection and instant switcher in the top bar (choice persisted in browser). Server errors and configuration field labels are fully localized. To add a new language, simply drop a new `{code}.json` in `tsbot/web/static/i18n/` without modifying code (missing keys seamlessly fall back to French).
+- **Accessible & Responsive**: Conforms to WCAG 2.2 AA standards (accessible contrast ratios, full keyboard navigation, skip link, visible focus rings, ARIA live announcements and dialog landmarks), and adapts smoothly down to 360 px viewports without horizontal scrolling. Any disabled button clearly explains why it cannot be used upon click or hover.
+- **Self-contained & offline**: Built with native JavaScript, CSS, and Python standard library only. No external frameworks, build tools, or CDN dependencies are needed.
 - **Log in** by picking your TeamSpeak nickname: the bot sends you a 6-digit code in a private TeamSpeak message. No password to remember.
 - **Everyone** sees the sentences the bot transcribed from their own voice, and the list of voice actions.
 - **Admins** (members of the server groups in `[web] admin_groups`, or the UIDs in `admin_uids`) also get: a live view of the channel, settings with explanations, identities and people not to transcribe, plugins, statistics, the bot's log, and a box to make the bot say something.
