@@ -13,7 +13,7 @@ Everything below was tested on a real TeamSpeak server (October 2026).
 | Joins a TeamSpeak 3 server (TeamSpeak 6 servers work too) | small Rust client built on [tsclientlib](https://github.com/ReSpeak/tsclientlib) |
 | Hears each person separately, cuts speech into sentences | TeamSpeak already sends one voice stream per person |
 | Knows who is talking | TeamSpeak UID or server group → a name you choose |
-| Speech-to-text (25 European languages) | [NVIDIA Parakeet TDT 0.6B v3](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3) |
+| Speech-to-text (25 European languages, language forced) | [NVIDIA Canary-1B-v2](https://huggingface.co/nvidia/canary-1b-v2) (or Parakeet TDT 0.6B v3) |
 | Saves everything (SQLite), exports to JSON lines | built in |
 | You talk to it with a wake word ("Hector, ...") | any OpenAI-compatible LLM; tested with [llama.cpp](https://github.com/ggml-org/llama.cpp) + Qwen3.5-4B |
 | Every action is confirmed out loud first | "yes" / "no" from the same person |
@@ -192,7 +192,7 @@ docker compose exec tsbot python -m tsbot export > archive.jsonl
 
 ### Speech-to-text
 
-NVIDIA Parakeet TDT 0.6B v3 understands 25 European languages and detects the language by itself. About 1 s per sentence on 3 CPU cores; the whole bot uses about 1 GB of RAM. It cannot be taught nicknames: if a name keeps coming out wrong, the LLM usually still matches it to the right person (it corrected "Bobe" to "Bob" in our tests).
+NVIDIA Canary-1B-v2 understands 25 European languages; `[stt] language` forces yours, so short sounds ("euh", "ouais", laughs) are not turned into English words, which Parakeet TDT 0.6B v3 (the other choice, it guesses the language) often does. About 0.4 s per sentence on an Intel i5-1135G7; the whole bot uses about 1.8 GB of RAM. It cannot be taught nicknames: if a name keeps coming out wrong, the LLM usually still matches it to the right person (it corrected "Bobe" to "Bob" in our tests).
 
 ## Write a plugin
 
@@ -243,4 +243,4 @@ The Rust bridge is built inside the Docker image. To build it on its own you nee
 
 ## License
 
-MIT. The bridge uses tsclientlib (MIT or Apache-2.0). Models are downloaded at runtime and keep their own licenses: Parakeet v3 (CC BY 4.0), Phonon 40m (CC BY-NC 4.0), Piper (GPL-3.0, run as a separate program), Qwen3.5 (Apache 2.0).
+MIT. The bridge uses tsclientlib (MIT or Apache-2.0). Models are downloaded at runtime and keep their own licenses: Canary-1B-v2 and Parakeet v3 (CC BY 4.0), Phonon 40m (CC BY-NC 4.0), Piper (GPL-3.0, run as a separate program), Qwen3.5 (Apache 2.0).

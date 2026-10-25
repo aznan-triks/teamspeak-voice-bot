@@ -16,7 +16,7 @@
    stdout: JSON line + PCM          stdin: play command + PCM
                 ▼                          │
 ┌──────────── tsbot (Python) ──────────────┴──────────────┐
-│ opt-out, minimum length → speech-to-text (Parakeet v3)  │
+│ opt-out, minimum length → speech-to-text (Canary-1B-v2) │
 │ → identity (UID, else server group) → SQLite → plugins  │
 │ wake word → LLM (OpenAI-compatible) → validated reply:  │
 │   answer · clarify · propose action → "yes"? → plugin   │
@@ -42,7 +42,7 @@ teamspeak-voice-bot/
 ├── bridge/src/main.rs        Rust bridge: hearing and speaking
 ├── tsbot/
 │   ├── __main__.py           main loop, bridge protocol, identities, CLI (run, export, say)
-│   ├── stt.py                Parakeet v3 (onnx-asr)
+│   ├── stt.py                Canary-1B-v2 / Parakeet v3 (onnx-asr)
 │   ├── voice.py              Voice (files, Phonon, Piper, cache) and Bot (say + remember)
 │   ├── llm.py                OpenAI-compatible client (urllib, no SDK)
 │   ├── router.py             wake word, LLM, confirmation, degraded mode
@@ -81,7 +81,11 @@ teamspeak-voice-bot/
 
 ## 4. Choices, with the evidence behind them (October 2026)
 
-### Speech-to-text: Parakeet TDT 0.6B v3
+### Speech-to-text: Canary-1B-v2, language forced (Parakeet TDT 0.6B v3 before)
+
+October 2026, live on the test server: Parakeet guesses the language, and short French sounds came out as English ("Euh" -> "Uh", "Ouais" -> "Wait"). Canary-1B-v2 (same onnx-asr runtime) takes the language: on 10 spoken-French test sentences it kept them French and wrote "tkt" as "TKT" (Parakeet: "T'as t"); 0.44 s per sentence against 0.31 s on an i5-1135G7. Still to watch on real slang: it sometimes normalises ("je go" -> "je vais").
+
+Earlier comparison:
 
 Measured on 3 CPU cores, 6 French sentences (Windows voices), int8:
 
