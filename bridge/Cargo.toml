@@ -10,6 +10,7 @@ description = "Headless TeamSpeak 3 client: receives voice, decodes it per speak
 tsclientlib = { git = "https://github.com/ReSpeak/tsclientlib", rev = "ee3bc6f", default-features = false, features = ["audio"] }
 tsproto-packets = { git = "https://github.com/ReSpeak/tsclientlib", rev = "ee3bc6f" }
 anyhow = "1"
+audiopus = "0.3.0-rc.0" # same version as tsclientlib, used to encode the bot's voice
 futures = "0.3"
 serde_json = "1"
 tokio = { version = "1", features = ["macros", "rt", "signal", "time"] }

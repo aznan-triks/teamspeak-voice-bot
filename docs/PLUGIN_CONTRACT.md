@@ -2,71 +2,72 @@
 
 A plugin is an importable Python module that defines `class Plugin`. It is loaded when its name is listed in `[plugins].enabled`, and it receives its own `[plugins."<module>"]` config section as a `dict`. The core contains no business logic: anything tied to an outside application (scores, accounts, rules) lives in a plugin, in its own repository.
 
-## v1: available now
+Every method below is optional. Types live in `tsbot/plugins.py`.
+
+## Listening
 
 ```python
 class Plugin:
     def __init__(self, config: dict): ...
-    def on_ready(self, me: Speaker) -> None: ...                # the bot's own profile, once connected
-    def on_transcription(self, t: Transcription) -> None: ...   # every archived utterance
+    def attach(self, bot) -> None: ...                       # once, before connecting: keep `bot` to speak
+    def on_ready(self, me: Speaker) -> None: ...             # the bot's own profile, once connected
+    def on_transcription(self, t: Transcription) -> None: ... # every saved sentence
+    def on_command(self, t: Transcription) -> None: ...      # a sentence that contains the wake word
 ```
-
-Types (`tsbot/plugins.py`):
 
 ```python
 Speaker(client_id: int, uid: str | None, nickname: str,
-        server_groups: tuple[str, ...], identity: str | None)
+        server_groups: tuple[str, ...], identity: str | None)   # identity None = unknown person
 Transcription(archive_id: int, speaker: Speaker, started_ms: int,
               duration_ms: int, text: str)
 ```
 
-How plugins are called:
-- Both methods are optional.
-- Calls are synchronous, in the order of `enabled`, on the main thread: a slow hook delays the next transcription. Do long input/output (HTTP calls…) in your own thread.
-- An exception raised by a plugin is logged and ignored: transcription and archiving go on.
-- `speaker.identity` is `None` for an unknown person. A plugin that changes data must refuse unknown people.
-- `on_ready` gives the bot's UID: a plugin that hands out something (points…) uses it to exclude the bot.
+`bot.say(text_or_phrase_key)` speaks (and saves the sentence); `bot.me` is the bot's `Speaker`.
 
-## v2: designed, not built yet
+## Voice actions
 
-The plugin declares what it can do; the core handles the LLM, the spoken confirmation and the voice.
+The plugin says what it can do; the core handles the LLM, the spoken confirmation and the voice.
 
 ```python
-@dataclass(frozen=True)
-class Action:
-    name: str          # unique, prefixed by the plugin: "scores.add_points"
-    description: str   # read by the LLM
-    params: dict       # JSON Schema of the arguments
-
-@dataclass(frozen=True)
-class ProposedAction:
-    name: str
-    args: dict
-    confirm_text: str                # sentence read back to the person who asked
-    requested_by: Speaker
-    transcript_ids: tuple[int, ...]  # archive rows that led to it
-
 class Plugin:
-    def attach(self, bot: "BotApi") -> None: ...            # before on_ready
-    def actions(self) -> list[Action]: ...
-    def context(self) -> dict[str, list[str]]: ...          # valid names, injected into the prompt
-    def execute(self, action: ProposedAction) -> str: ...   # returns the sentence to say
-
-class BotApi:
-    def say(self, sound: str) -> None: ...  # audio file (preferred) or text (text-to-speech)
+    def actions(self) -> list[Action]: ...                 # read once, when the bot connects
+    def context(self) -> dict[str, list]: ...              # valid names etc., sent to the LLM on every request
+    def execute(self, action: ProposedAction) -> str: ...  # after "yes"; returns the sentence to say
+    def on_action(self, event: ActionEvent) -> None: ...   # every status change of any action
 ```
 
+```python
+Action(name: str,          # unique, prefixed by the plugin: "scoreboard.add_points"
+       description: str,   # read by the LLM
+       params: dict)       # JSON Schema of the arguments
+ProposedAction(name, args, confirm_text, requested_by: Speaker, transcript_ids)
+ActionEvent(action: ProposedAction, status: str, result: str | None)
+# status: proposed | replaced | cancelled | expired | failed | done
+```
+
+`params` supports this JSON Schema subset, checked by the core before anything is proposed: an object with `properties` (`type`: string, integer, number, boolean; `enum`) and `required`. Unknown keys are refused. Use `enum` for names (players, games...): the LLM then cannot invent one.
+
 How an action flows:
-1. A transcription starts with the wake word → the core calls the LLM with the `actions()` and `context()` of every plugin.
-2. The LLM answers `propose`. The core checks: declared action, arguments match the schema, known person.
-3. The bot reads `confirm_text` aloud and waits 20 s for "yes" or "no" from the **same UID**.
-4. "Yes" → `execute()`; the returned sentence is read aloud. Silence or "no" → cancelled and logged.
+1. A sentence contains the wake word → the core sends the LLM the actions, the contexts and the last 20 lines.
+2. The LLM answers `propose`. The core checks: declared action, valid arguments, known person (`identity` not `None`).
+3. The bot reads `confirm_text` and waits 20 s (after it finished speaking) for "oui" / "non" from the **same UID**.
+4. "Oui" → `execute()`, and the returned sentence is read out. "Non", silence or an error → nothing is done.
+5. Every step is saved in the `actions` table of the archive.
 
-What `execute()` is responsible for: checking that the person is allowed to do it, making the call idempotent (a repeated confirmation must not count twice), calling the application's API, and never changing data from `on_transcription`. Test plugins against a fake server, never against real data.
+What `execute()` is responsible for: checking that the person may do this, making the call idempotent (a repeated confirmation must not count twice), calling the application's API, and never changing data from `on_transcription`. Test plugins against a fake server, never against real data.
 
-## Minimal example
+## Rules for every hook
 
-`tsbot/plugins_examples/echo.py` appends every transcription to a file. For your own plugins, use the `plugins/` folder: `docker-compose.yml` mounts it and adds it to `PYTHONPATH`.
+- Hooks run one at a time on the main thread: a slow hook delays the next transcription. Do long input/output (HTTP calls…) in your own thread, except in `execute()`, whose answer the bot waits for.
+- An exception raised by a plugin is logged and ignored: transcription and archiving go on. A failing `execute()` makes the bot say the action failed.
+- Use `on_ready`'s UID to exclude the bot from anything it should not receive (points...).
+
+## Examples
+
+- `tsbot/plugins_examples/echo.py`: appends every sentence to a file (listening only).
+- `tsbot/plugins_examples/scoreboard.py`: a voice action that adds points in a JSON file. Start from this one to connect a real application.
+
+Your own plugins go in the `plugins/` folder: `docker-compose.yml` mounts it and adds it to `PYTHONPATH`.
 
 ```toml
 [plugins]

@@ -1,4 +1,4 @@
-"""Plugin contract (v1). Full specification: docs/PLUGIN_CONTRACT.md."""
+"""Plugin contract. Full specification: docs/PLUGIN_CONTRACT.md."""
 from __future__ import annotations
 
 import importlib
@@ -24,6 +24,30 @@ class Transcription:
     started_ms: int  # Unix time, milliseconds
     duration_ms: int
     text: str
+
+
+@dataclass(frozen=True)
+class Action:
+    """Something a plugin can do when asked out loud. The LLM picks it; a person confirms it."""
+    name: str          # unique, prefixed by the plugin: "scores.add_points"
+    description: str   # read by the LLM
+    params: dict       # JSON Schema of the arguments (subset: see router.valid)
+
+
+@dataclass(frozen=True)
+class ProposedAction:
+    name: str
+    args: dict
+    confirm_text: str
+    requested_by: Speaker
+    transcript_ids: tuple[int, ...]
+
+
+@dataclass(frozen=True)
+class ActionEvent:
+    action: ProposedAction
+    status: str  # proposed | replaced | cancelled | expired | failed | done
+    result: str | None = None
 
 
 def load(cfg: dict) -> list:

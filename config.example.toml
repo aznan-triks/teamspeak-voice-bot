@@ -1,38 +1,67 @@
 # Copy this file to config.toml (git ignores config.toml), then edit it.
-# Passwords do NOT go here: put them in a .env file (see README), as
-# TS_SERVER_PASSWORD and TS_CHANNEL_PASSWORD.
+# Secrets do NOT go here: put them in a .env file (see README):
+# TS_SERVER_PASSWORD, TS_CHANNEL_PASSWORD, HF_TOKEN, LLM_API_KEY.
 
 [teamspeak]
 address = "192.168.1.10"                 # server address, optionally with :port (default port 9987)
-nickname = "Voice bot (recording)"       # tell people the bot records
+nickname = "Hector (recording)"          # tell people the bot records
 channel = ""                             # channel path like "Lobby/Games"; empty = the server's default channel
 identity_file = "/data/identity.json"    # created on first start; keep it to keep the bot's TeamSpeak profile
 bridge_binary = "ts-bridge"
 max_utterance_s = 30                     # long speeches are cut into pieces of this length
 
 [stt]
+engine = "parakeet"       # "parakeet" (NVIDIA Parakeet TDT v3: 25 European languages, no made-up sentences on silence)
+                          # or "whisper" (any language, understands the vocabulary list below)
+min_utterance_ms = 400    # shorter sounds are ignored (coughs, clicks)
+# Whisper only:
 model = "small"           # tiny | base | small | medium | large-v3-turbo (bigger = better but slower)
-compute_type = "int8"     # int8 = lightest on a CPU
+compute_type = "int8"
 cpu_threads = 3
 model_dir = "/data/models"
-language = "fr"           # language spoken on your server ("en", "de", ...)
-beam_size = 1             # 1 = fast; 5 = slightly more accurate, about twice as slow
-min_utterance_ms = 400    # shorter sounds are ignored (coughs, clicks)
+language = "fr"
+beam_size = 1
 max_no_speech_prob = 0.6
-# Words people say on your server (nicknames, game names): helps Whisper spell them.
-vocabulary = "Friends chatting on TeamSpeak."
+vocabulary = "Friends chatting on TeamSpeak."   # nicknames and game names people say
 
 [archive]
 path = "/data/archive.sqlite3"
 
 [privacy]
-# TeamSpeak UIDs of people who do not want to be transcribed: their voice never reaches Whisper.
+# TeamSpeak UIDs of people who do not want to be transcribed: their voice never reaches speech-to-text.
 opt_out_uids = []
 
 # Who is speaking. "uid:<UID>" (reliable, one per person) wins over "group:<server group name>".
+# Only known people can trigger actions by voice.
 [identities]
 # "uid:ExampleUid0aBcDeFgHiJkLmNoPqRs=" = "Alice"
 # "group:Admin" = "Bob"
+
+[voice]
+engine = "phonon"         # "phonon" (best French voice, see README "A better voice"), falls back to "piper" by itself
+language = "fr"
+phonon_model = "hf://gradium/phonon-40m-fr"
+# phonon_voice = "Tiphaine"
+piper_voice = "fr_FR-siwis-medium"
+piper_dir = "/data/models/piper"
+cache_dir = "/data/tts_cache"   # every sentence is generated once, then replayed from here
+
+# What the bot says on its own. Replace a sentence, or give the path of an audio file you recorded.
+[voice.phrases]
+# degraded = "/data/sounds/degraded.ogg"
+# cancelled = "OK, je laisse tomber."
+
+[llm]
+enabled = false           # turn on once you have an LLM server (see README "Talk to the bot")
+base_url = "http://host.docker.internal:8080/v1"   # llama.cpp's llama-server, or any OpenAI-compatible API
+model = "qwen3.5-4b"      # name sent to the server (llama-server ignores it)
+timeout_s = 20
+json_mode = true          # ask for strict JSON; turn off if your provider refuses response_format
+wake_words = ["hector"]   # say it to talk to the bot ("Hector, ..."): tested to survive speech-to-text
+confirm_timeout_s = 20    # time to say "oui" or "non" after the bot asks
+max_failures = 3          # failures in a row before degraded mode
+probe_interval_s = 300    # in degraded mode, check the LLM again this often
+prompt_file = "prompts/system_fr.txt"
 
 [plugins]
 enabled = ["tsbot.plugins_examples.echo"]

@@ -2,27 +2,50 @@
 //!
 //! Joins a server, receives the channel's voice, decodes it per speaker (Opus → PCM) and writes
 //! each utterance to stdout: one JSON line, then `samples` × 2 bytes of 16-bit PCM, 16 kHz, mono.
-//! Logs go to stderr. Full protocol: docs/ARCHITECTURE.md §3.
+//! Reads `{"cmd":"play","samples":N}` + N samples of 16-bit PCM, 48 kHz, mono on stdin and says
+//! them in the channel. Logs go to stderr. Full protocol: docs/ARCHITECTURE.md §3.
 
-use std::collections::HashMap;
-use std::io::Write;
+use std::collections::{HashMap, VecDeque};
+use std::io::{BufRead, Read, Write};
 use std::sync::mpsc::{channel, Sender};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use anyhow::{bail, Context, Result};
+use audiopus::coder::Encoder;
+use audiopus::{Application, Channels, SampleRate};
 use futures::prelude::*;
 use serde_json::{json, Value};
 use tsclientlib::audio::AudioHandler;
 use tsclientlib::{ClientId, Connection, DisconnectOptions, Identity, StreamItem};
-use tsproto_packets::packets::AudioData;
+use tsproto_packets::packets::{AudioData, CodecType, OutAudio};
 
 /// 20 ms of 48 kHz interleaved stereo: the AudioHandler's output format.
 const TICK_SAMPLES: usize = 48_000 / 50 * 2;
 /// 3 stereo frames at 48 kHz = 1 mono sample at 16 kHz.
 const DECIMATION: usize = 6;
+/// 20 ms of 48 kHz mono: one Opus frame of the bot's voice.
+const SEND_FRAME: usize = 48_000 / 50;
+
+/// Reads play commands from stdin until it closes. Each command becomes one block of samples.
+fn read_commands(audio: Sender<Vec<i16>>) -> Result<()> {
+	let mut stdin = std::io::stdin().lock();
+	let mut line = String::new();
+	while stdin.read_line(&mut line)? > 0 {
+		let cmd: Value = serde_json::from_str(&line).context("invalid command line on stdin")?;
+		let samples = cmd["samples"].as_u64().unwrap_or(0) as usize;
+		let mut bytes = vec![0u8; samples * 2];
+		stdin.read_exact(&mut bytes)?;
+		if cmd["cmd"] == "play" {
+			let _ = audio.send(bytes.chunks_exact(2).map(|b| i16::from_le_bytes([b[0], b[1]])).collect());
+		}
+		line.clear();
+	}
+	Ok(())
+}
 
 struct Speech {
 	started_ms: u128,
+	who: Value, // read when the person starts talking: they may have left by the time they stop
 	pcm: Vec<i16>,
 }
 
@@ -122,6 +145,17 @@ async fn main() -> Result<()> {
 	let own = con.get_state()?.own_client.0;
 	emit(&out, json!({ "event": "ready", "speaker": speaker(&con, own) }), &[]);
 
+	let (voice_in, voice) = channel::<Vec<i16>>();
+	std::thread::spawn(move || {
+		if let Err(error) = read_commands(voice_in) {
+			tracing::error!(%error, "stdin closed or unreadable: the bot can no longer speak");
+		}
+	});
+	let encoder = Encoder::new(SampleRate::Hz48000, Channels::Mono, Application::Voip)?;
+	let mut to_say: VecDeque<i16> = VecDeque::new();
+	let mut saying = false;
+	let mut opus = [0u8; 1275]; // largest possible Opus packet
+
 	let mut audio = AudioHandler::<u16>::new();
 	let mut talking: HashMap<u16, Speech> = HashMap::new();
 	let mut buf = vec![0f32; TICK_SAMPLES];
@@ -138,9 +172,27 @@ async fn main() -> Result<()> {
 		};
 		match item {
 			None => {
+				// The bot's voice: one 20 ms Opus frame per tick, so it plays at normal speed.
+				to_say.extend(voice.try_iter().flatten());
+				if !to_say.is_empty() {
+					let mut frame: Vec<i16> = to_say.drain(..to_say.len().min(SEND_FRAME)).collect();
+					frame.resize(SEND_FRAME, 0); // pad the last frame with silence
+					let len = encoder.encode(&frame, &mut opus)?;
+					let data = AudioData::C2S { id: 0, codec: CodecType::OpusVoice, data: &opus[..len] };
+					con.send_audio(OutAudio::new(&data))?;
+					saying = true;
+				} else if saying {
+					// An empty packet tells listeners the bot stopped talking.
+					con.send_audio(OutAudio::new(&AudioData::C2S { id: 0, codec: CodecType::OpusVoice, data: &[] }))?;
+					saying = false;
+					emit(&out, json!({ "event": "played" }), &[]);
+				}
+
 				buf.fill(0.0);
 				let ended = audio.fill_buffer_with_proc(&mut buf, |id, samples| {
-					let s = talking.entry(*id).or_insert_with(|| Speech { started_ms: now_ms(), pcm: Vec::new() });
+					let s = talking
+						.entry(*id)
+						.or_insert_with(|| Speech { started_ms: now_ms(), who: speaker(&con, *id), pcm: Vec::new() });
 					// shortcut: box-filter decimation (averaging), good enough for speech recognition;
 					// switch to a real resampler if archived audio quality ever matters.
 					s.pcm.extend(samples.chunks(DECIMATION).map(|c| {
@@ -153,7 +205,7 @@ async fn main() -> Result<()> {
 					if done && !s.pcm.is_empty() {
 						let header = json!({
 							"event": "utterance",
-							"speaker": speaker(&con, *id),
+							"speaker": s.who,
 							"started_ms": s.started_ms as u64,
 							"samples": s.pcm.len(),
 						});

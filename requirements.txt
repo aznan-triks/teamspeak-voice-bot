@@ -1,1 +1,4 @@
-faster-whisper==1.2.1
+onnx-asr[hub]==0.12.0  # speech-to-text: NVIDIA Parakeet TDT 0.6B v3 (default)
+faster-whisper==1.2.1  # speech-to-text: Whisper (option); also brings PyAV, used to read audio files
+ptts==0.4.1            # text-to-speech: Phonon (Rust runtime, no PyTorch)
+piper-tts==1.8.0       # text-to-speech fallback; GPL-3, only ever run as a separate program

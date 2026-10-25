@@ -1,4 +1,4 @@
-"""Entry point: `python -m tsbot [run|export] [--config config.toml]`."""
+"""Entry point: `python -m tsbot [run|export|say "text"] [--config config.toml]`."""
 from __future__ import annotations
 
 import argparse
@@ -49,7 +49,7 @@ def to_speaker(cfg: dict, raw: dict) -> Speaker:
     )
 
 
-def serve(stream, transcribe, archive: Archive, loaded: list, cfg: dict) -> None:
+def serve(stream, transcribe, archive: Archive, loaded: list, cfg: dict, bot=None, router=None) -> None:
     stt = cfg.get("stt", {})
     opt_out = set(cfg.get("privacy", {}).get("opt_out_uids", []))
     for header, pcm in read_frames(stream):
@@ -57,7 +57,11 @@ def serve(stream, transcribe, archive: Archive, loaded: list, cfg: dict) -> None
         if header["event"] == "ready":
             me = to_speaker(cfg, raw)
             log.info("connected as %s (uid %s)", me.nickname, me.uid)
+            if bot:
+                bot.me = me
             plugins.dispatch(loaded, "on_ready", me)
+            if router:
+                router.start()
             continue
         if header["event"] != "utterance" or raw.get("uid") in opt_out:
             continue
@@ -76,7 +80,12 @@ def serve(stream, transcribe, archive: Archive, loaded: list, cfg: dict) -> None
             server_groups=speaker.server_groups, channel_id=raw.get("channel_id"), text=text, stt_ms=stt_ms,
         )
         log.info("[%s] %s  (%d ms audio, %d ms STT)", speaker.identity or speaker.nickname, text, duration_ms, stt_ms)
-        plugins.dispatch(loaded, "on_transcription", Transcription(archive_id, speaker, header.get("started_ms", 0), duration_ms, text))
+        t = Transcription(archive_id, speaker, header.get("started_ms", 0), duration_ms, text)
+        if bot:
+            bot.heard(t)
+        plugins.dispatch(loaded, "on_transcription", t)
+        if router:
+            router.handle(t)
 
 
 def spawn_bridge(ts: dict) -> subprocess.Popen:
@@ -90,31 +99,63 @@ def spawn_bridge(ts: dict) -> subprocess.Popen:
     if ts.get("channel"):
         env["TS_CHANNEL"] = ts["channel"]
     # Passwords only come from environment variables (TS_SERVER_PASSWORD, TS_CHANNEL_PASSWORD).
-    return subprocess.Popen([ts.get("bridge_binary", "ts-bridge")], stdout=subprocess.PIPE, env=env)
+    return subprocess.Popen([ts.get("bridge_binary", "ts-bridge")], stdin=subprocess.PIPE, stdout=subprocess.PIPE, env=env)
+
+
+def stop_bridge(bridge: subprocess.Popen) -> None:
+    if bridge.poll() is None:
+        bridge.send_signal(signal.SIGINT if os.name == "posix" else signal.SIGTERM)  # SIGINT = clean disconnect
+        try:
+            bridge.wait(5)
+        except subprocess.TimeoutExpired:
+            bridge.kill()
 
 
 def run(cfg: dict) -> None:
     from .stt import Transcriber
+    from .voice import Bot, Voice
 
     transcribe = Transcriber(cfg.get("stt", {}))
     archive = Archive(cfg.get("archive", {}).get("path", "data/archive.sqlite3"))
     loaded = plugins.load(cfg)
     bridge = spawn_bridge(cfg["teamspeak"])
+    bot = Bot(Voice(cfg.get("voice", {}), bridge.stdin), archive)
+    plugins.dispatch(loaded, "attach", bot)
+    router = None
+    if cfg.get("llm", {}).get("enabled"):
+        from .llm import LLM
+        from .router import Router
+
+        router = Router(cfg["llm"], LLM(cfg["llm"]), bot, loaded)
     try:
-        serve(bridge.stdout, transcribe, archive, loaded, cfg)
+        serve(bridge.stdout, transcribe, archive, loaded, cfg, bot, router)
     finally:
-        if bridge.poll() is None:
-            bridge.send_signal(signal.SIGINT if os.name == "posix" else signal.SIGTERM)  # SIGINT = clean disconnect
-            try:
-                bridge.wait(5)
-            except subprocess.TimeoutExpired:
-                bridge.kill()
+        stop_bridge(bridge)
     sys.exit(bridge.returncode or 0)
+
+
+def say(cfg: dict, text: str) -> None:
+    """Join the server, say one sentence, leave. Handy to test the voice."""
+    from .voice import AUDIO_FILES, Voice
+
+    bridge = spawn_bridge(cfg["teamspeak"])
+    voice = Voice(cfg.get("voice", {}), bridge.stdin)
+    if not text.lower().endswith(AUDIO_FILES):
+        voice.speech_file(text)  # generate while the bridge connects
+    try:
+        for header, _ in read_frames(bridge.stdout):
+            if header["event"] == "ready":
+                voice.say(text)
+            elif header["event"] == "played":
+                break
+    finally:
+        stop_bridge(bridge)
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(prog="tsbot")
-    parser.add_argument("command", nargs="?", default="run", choices=["run", "export"])
+    parser.add_argument("command", nargs="?", default="run", choices=["run", "export", "say"])
+    parser.add_argument("text", nargs="?", help="what to say (say command only)")
     parser.add_argument("--config", default=os.environ.get("TSBOT_CONFIG", "config.toml"))
     args = parser.parse_args()
     with open(args.config, "rb") as f:
@@ -125,6 +166,11 @@ def main() -> None:
         log.info("%d rows exported", n)
         return
     signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))  # `docker stop`: exit cleanly through `finally`
+    if args.command == "say":
+        if not args.text:
+            parser.error("say needs a text, for example: python -m tsbot say \"Bonjour\"")
+        say(cfg, args.text)
+        return
     run(cfg)
 
 

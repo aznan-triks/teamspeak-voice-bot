@@ -4,15 +4,19 @@ services:
     restart: unless-stopped
     volumes:
       - ./config.toml:/app/config.toml:ro
-      - ./data:/data # bot identity, SQLite archive, Whisper models
+      - ./data:/data # bot identity, SQLite archive, models, voice cache
       - ./plugins:/app/plugins:ro # your own plugins (not part of this repository)
     environment:
       PYTHONPATH: /app/plugins
       # Secrets come from a .env file next to this file (never commit it).
       TS_SERVER_PASSWORD: ${TS_SERVER_PASSWORD:-}
       TS_CHANNEL_PASSWORD: ${TS_CHANNEL_PASSWORD:-}
+      HF_TOKEN: ${HF_TOKEN:-} # only for the gated Phonon voice
+      LLM_API_KEY: ${LLM_API_KEY:-} # only for hosted LLM APIs
+    extra_hosts:
+      - host.docker.internal:host-gateway # reach an LLM server running on the same machine
     deploy:
       resources:
         limits:
           cpus: "3" # leave room for the other services on a small machine
-          memory: 2g
+          memory: 3g

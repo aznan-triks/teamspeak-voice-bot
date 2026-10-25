@@ -1,4 +1,4 @@
-"""Speech-to-text with faster-whisper (CPU, int8)."""
+"""Speech-to-text on the CPU: NVIDIA Parakeet TDT v3 (default) or faster-whisper."""
 from __future__ import annotations
 
 # Phrases Whisper makes up on silence or noise (they come from its French training subtitles).
@@ -10,8 +10,9 @@ HALLUCINATIONS = (
     "merci d'avoir regardé",
     "abonnez-vous",
 )
-# Above this, a segment is mostly repetition ("... ... ...") rather than speech (Whisper's own default).
+# Above this, a Whisper segment is mostly repetition ("... ... ...") rather than speech (Whisper's own default).
 MAX_COMPRESSION_RATIO = 2.4
+ENGINES = ("parakeet", "whisper")
 
 
 def is_hallucination(text: str) -> bool:
@@ -21,21 +22,33 @@ def is_hallucination(text: str) -> bool:
 
 class Transcriber:
     def __init__(self, cfg: dict):
-        from faster_whisper import WhisperModel  # late import: heavy, and not needed by the tests
-
         self.cfg = cfg
-        self.model = WhisperModel(
-            cfg.get("model", "small"),
-            device="cpu",
-            compute_type=cfg.get("compute_type", "int8"),
-            cpu_threads=cfg.get("cpu_threads", 0),
-            download_root=cfg.get("model_dir"),
-        )
+        self.engine = cfg.get("engine", "parakeet")
+        if self.engine not in ENGINES:
+            raise ValueError(f"stt.engine must be one of {ENGINES}, not {self.engine!r}")
+        # Late imports: heavy, and not needed by the tests.
+        if self.engine == "parakeet":
+            import onnx_asr
+
+            self.model = onnx_asr.load_model(cfg.get("parakeet_model", "nemo-parakeet-tdt-0.6b-v3"), quantization="int8")
+        else:
+            from faster_whisper import WhisperModel
+
+            self.model = WhisperModel(
+                cfg.get("model", "small"),
+                device="cpu",
+                compute_type=cfg.get("compute_type", "int8"),
+                cpu_threads=cfg.get("cpu_threads", 0),
+                download_root=cfg.get("model_dir"),
+            )
 
     def __call__(self, pcm: bytes) -> str:
         import numpy as np
 
         audio = np.frombuffer(pcm, np.int16).astype(np.float32) / 32768.0
+        if self.engine == "parakeet":
+            text = self.model.recognize(audio, sample_rate=16000).strip()
+            return "" if is_hallucination(text) else text
         segments, _ = self.model.transcribe(
             audio,
             language=self.cfg.get("language", "fr"),

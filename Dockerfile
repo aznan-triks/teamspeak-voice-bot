@@ -16,6 +16,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 COPY --from=bridge /src/target/release/ts-bridge /usr/local/bin/ts-bridge
 COPY tsbot/ tsbot/
+COPY prompts/ prompts/
 ENV PYTHONUNBUFFERED=1 TSBOT_CONFIG=/app/config.toml HF_HOME=/data/models
 USER bot
 VOLUME /data

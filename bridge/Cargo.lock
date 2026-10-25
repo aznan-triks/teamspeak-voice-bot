@@ -2155,6 +2155,7 @@ name = "ts-bridge"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "audiopus",
  "futures",
  "serde_json",
  "tokio",
