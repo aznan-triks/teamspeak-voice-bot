@@ -70,6 +70,7 @@ class Router:
             plugins.dispatch(self.loaded, "on_command", t)
         if not (addressed or same):
             return
+        asked = time.monotonic()
         reply = self._ask(now)
         if reply is None:
             return
@@ -77,7 +78,7 @@ class Router:
         if kind in ("answer", "clarify", "explain") and isinstance(reply.get("text"), str):
             self.bot.say(reply["text"])
         elif kind == "propose":
-            self._propose(reply, t, now)
+            self._propose(reply, t, now, asked)
         elif kind == "confirm" and same:
             self._finish(reply.get("decision") == "oui")
 
@@ -115,7 +116,7 @@ class Router:
         log.info("LLM: %s", json.dumps(reply, ensure_ascii=False))
         return reply
 
-    def _propose(self, reply: dict, t, now: float) -> None:
+    def _propose(self, reply: dict, t, now: float, asked: float) -> None:
         entry = self.actions.get(reply.get("action"))
         confirm = reply.get("confirm_text")
         if entry is None or not valid(reply.get("args"), entry[1].params) or not isinstance(confirm, str) or not confirm.strip():
@@ -130,8 +131,8 @@ class Router:
         action = ProposedAction(entry[1].name, reply["args"], confirm, t.speaker, (t.archive_id,))
         row = self.bot.archive.add_action(action, int(time.time() * 1000))
         seconds = self.bot.say(confirm)
-        # The waiting time starts once the question has been read out.
-        self.pending = {"action": action, "row": row, "plugin": entry[0], "deadline": now + seconds + self.cfg.get("confirm_timeout_s", 20)}
+        # The waiting time starts once the question has been read out, after the LLM and the voice took their time.
+        self.pending = {"action": action, "row": row, "plugin": entry[0], "deadline": now + time.monotonic() - asked + seconds + self.cfg.get("confirm_timeout_s", 20)}
         plugins.dispatch(self.loaded, "on_action", ActionEvent(action, "proposed"))
 
     def _close(self, status: str, result: str | None = None) -> dict:

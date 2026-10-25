@@ -59,3 +59,4 @@ enabled = []              # e.g. ["tsbot.plugins_examples.scoreboard", "my_plugi
 # [plugins."tsbot.plugins_examples.scoreboard"]
 # players = ["Alice", "Bob"]
 # games = ["Fléchettes", "Rocket League"]
+# path = "/data/scoreboard.json"

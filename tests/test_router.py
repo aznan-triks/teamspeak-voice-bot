@@ -1,6 +1,7 @@
 """Wake word, spoken confirmation, degraded mode and the LLM client, with a fake LLM and a fake voice."""
 import json
 import threading
+import time
 import unittest
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
@@ -105,6 +106,18 @@ class RouterTest(unittest.TestCase):
         self.hear(BOB, "bref", now=60)  # 20 s timeout passed
         self.assertEqual(self.statuses(), ["cancelled", "expired"])
         self.assertEqual(self.plugin.done, [])
+
+    def test_waiting_starts_after_a_slow_llm(self):
+        class SlowLLM(FakeLLM):
+            def chat(self, system, user):
+                time.sleep(1)
+                return super().chat(system, user)
+
+        self.setup(SlowLLM(PROPOSE))
+        self.router.cfg["confirm_timeout_s"] = 0.5
+        self.hear(ALICE, "jarvis un point pour Bob", now=1)
+        self.hear(ALICE, "oui", now=3)  # 1 s of LLM + 1 s of speech + 0.5 s to answer: still in time
+        self.assertEqual(self.statuses(), ["done"])
 
     def test_correction_with_wake_word_goes_to_the_llm(self):
         llm = FakeLLM(PROPOSE, dict(PROPOSE, args={"player": "Alice", "points": 2}, confirm_text="Deux points pour Alice ?"))
