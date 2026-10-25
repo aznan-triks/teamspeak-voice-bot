@@ -120,6 +120,20 @@ class WebTest(unittest.TestCase):
         self.call(admin, "POST", "/api/restart")
         self.assertEqual(self.fake.restarts, 1)
 
+    def test_admins_are_granted_and_removed_from_the_site(self):
+        admin, member = self.login(ADMIN), self.login(MEMBER)
+        self.assertIn("error", self.call(member, "GET", "/api/stats"))
+        cookie = self.app.login_finish(MEMBER["client_id"], self.code(MEMBER))[1]
+        self.call(admin, "POST", "/api/settings", {"fields": {"web.admin_uids": ["member="]}})
+        self.assertNotIn("error", self.call(self.app.session(cookie), "GET", "/api/stats"))  # same session, checked again
+        self.call(admin, "POST", "/api/settings", {"fields": {"web.admin_uids": [], "web.admin_groups": []}})
+        self.assertIn("error", self.call(self.app.session(cookie), "GET", "/api/stats"))
+        self.assertIn("error", self.call(self.app.session(self.app.login_finish(ADMIN["client_id"], self.code(ADMIN))[1]), "GET", "/api/stats"))
+
+    def code(self, who):
+        self.app.login_start(who["client_id"])
+        return self.fake.messages[-1]["text"].split(" : ")[1][:6]
+
     def test_settings_are_checked_and_secrets_masked(self):
         admin = self.login(ADMIN)
         self.call(admin, "POST", "/api/settings", {"fields": {"teamspeak.server_password": "Femta"}})

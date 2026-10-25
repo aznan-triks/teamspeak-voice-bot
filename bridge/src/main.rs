@@ -12,7 +12,7 @@
 use std::collections::{HashMap, VecDeque};
 use std::io::{BufRead, Read, Write};
 use std::sync::mpsc::{channel, Sender};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use anyhow::{bail, Context, Result};
 use audiopus::coder::Encoder;
@@ -71,6 +71,7 @@ struct Speech {
 	started_ms: u128,
 	who: Value, // read when the person starts talking: they may have left by the time they stop
 	pcm: Vec<f32>, // 48 kHz mono, converted to 16 kHz once the person stops
+	quiet_since: Option<Instant>, // TeamSpeak stopped their voice: kept a moment in case they go on
 }
 
 /// Windowed-sinc (Blackman) low-pass, then decimation: the old 3-sample average let 8-16 kHz fold onto
@@ -179,6 +180,8 @@ fn listeners(con: &Connection) -> Vec<String> {
 async fn main() -> Result<()> {
 	tracing_subscriber::fmt().with_writer(std::io::stderr).init();
 	let max_samples = env("TS_MAX_UTTERANCE_S", "30").parse::<usize>()? * 16_000;
+	// TeamSpeak cuts the voice at every short pause: pieces closer than this are one sentence for speech-to-text.
+	let join_gap = Duration::from_millis(env("TS_JOIN_GAP_MS", "1000").parse()?);
 
 	let mut opts = Connection::build(env("TS_ADDRESS", "localhost"))
 		.name(env("TS_NICKNAME", "VoiceBot"))
@@ -304,13 +307,19 @@ async fn main() -> Result<()> {
 					let s = talking.entry(*id).or_insert_with(|| {
 						let who = speaker(&con, *id);
 						emit(&out, json!({ "event": "speaking", "speaker": who }), &[]); // live view: someone starts talking
-						Speech { started_ms: now_ms(), who, pcm: Vec::new() }
+						Speech { started_ms: now_ms(), who, pcm: Vec::new(), quiet_since: None }
 					});
+					if s.quiet_since.take().is_some() {
+						s.pcm.extend(std::iter::repeat(0.0).take(48_000 / 5)); // 0.2 s of silence between the pieces
+					}
 					s.pcm.extend(samples.chunks(2).map(|lr| lr.iter().sum::<f32>() / lr.len() as f32)); // stereo → mono
 				});
 				// End of speech, or a monologue cut into pieces: the speech model works on 30 s windows.
 				talking.retain(|id, s| {
-					let done = ended.contains(id) || s.pcm.len() >= max_samples * DECIMATION;
+					if ended.contains(id) && s.quiet_since.is_none() {
+						s.quiet_since = Some(Instant::now());
+					}
+					let done = s.quiet_since.is_some_and(|t| t.elapsed() >= join_gap) || s.pcm.len() >= max_samples * DECIMATION;
 					if done && !s.pcm.is_empty() {
 						let pcm = to_16k(&s.pcm);
 						let header = json!({

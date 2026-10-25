@@ -9,12 +9,14 @@ channel = ""                             # channel path like "Lobby/Games"; empt
 identity_file = "/data/identity.json"    # created on first start; keep it to keep the bot's TeamSpeak profile
 bridge_binary = "ts-bridge"
 max_utterance_s = 30                     # long speeches are cut into pieces of this length
+join_gap_ms = 1000                       # TeamSpeak cuts the voice at short pauses: closer pieces are joined into one sentence
 
 [stt]
 # NVIDIA Canary-1B-v2 with the language forced: "euh", "ouais" and laughs stay French.
 # "nemo-parakeet-tdt-0.6b-v3" is a bit faster but guesses the language (short sounds often come out as English).
 model = "nemo-canary-1b-v2"
 language = "fr"
+vocabulary = []           # the group's own words (games, tools...): what sounds like one is spelled like it
 # To judge another model on real voices: it transcribes the same sounds in the background and the log shows both texts.
 # compare_model = "onnx-community/whisper-large-v3-turbo"
 # compare_threads = 2       # CPU cores it may use

@@ -405,31 +405,61 @@ async function pagePeople() {
   const [s, state] = await Promise.all([api("/api/settings"), api("/api/state").catch(() => ({ clients: [] }))]);
   const online = state.clients.filter((c) => c.uid && c.client_id !== state.me?.client_id);
   const nameOf = (uid) => online.find((c) => c.uid === uid)?.nickname;
-  let rows = Object.entries(s.identities);
+  // Unset admin grades mean the bot's default, "Server Admin" (tsbot/web/app.py is_admin): shown so it can be unticked.
+  const field = (key) => s.fields.find((f) => `${f.section}.${f.key}` === key)?.value ?? (key === "web.admin_groups" ? ["Server Admin"] : []);
+  const admins = { uid: new Set(field("web.admin_uids")), group: new Set(field("web.admin_groups")) };
+  let adminsChanged = false; // only then are the two admin lists saved: an unset list keeps the bot's default
+  const groups = [...new Set(online.flatMap((c) => c.server_groups || []))].sort();
+  // Admins without a player name are listed too: the page shows everyone who can manage the bot.
+  let rows = [...Object.entries(s.identities), ...[...admins.uid].map((u) => `uid:${u}`), ...[...admins.group].map((g) => `group:${g}`)]
+    .map((r) => (Array.isArray(r) ? r : [r, ""])).filter(([k], i, all) => all.findIndex(([x]) => x === k) === i);
   let excluded = [...s.opt_out_uids];
+  const kind = (k) => (k.startsWith("group:") ? "group" : "uid");
+  const isAdmin = (k) => admins[kind(k)].has(k.slice(k.indexOf(":") + 1));
+  const who = (k) => kind(k) === "group" ? `Grade « ${esc(k.slice(6))} »<div class="muted">tous ceux qui ont ce grade</div>`
+    : nameOf(k.slice(4)) ? `${esc(nameOf(k.slice(4)))}<div class="muted">connecté</div>` : `Hors ligne<div class="muted">identifiant ${esc(k.slice(4, 12))}…</div>`;
+  const mine = (k) => k === `uid:${me.uid}`; // never let an admin take their own rights away by mistake
   const draw = () => {
+    const used = new Set(rows.map(([k]) => k));
     main.innerHTML = `<h1>Identités et exclusions</h1>
-      <p class="lede">Une identité relie une personne TeamSpeak (par son identifiant, ou tout un grade) à son nom de joueur. Seules les personnes connues peuvent demander une action à la voix.</p>
+      <p class="lede">Relie une personne TeamSpeak, ou tout un grade TeamSpeak, à son nom de joueur. Seules les personnes connues peuvent demander une action à la voix. Coche « Administrateur » pour lui ouvrir toutes les pages de ce site.</p>
       <section class="panel stack"><h2>Identités</h2>
-        <table class="table responsive"><thead><tr><th>Personne TeamSpeak</th><th>Nom de joueur</th><th></th></tr></thead><tbody>
-        ${rows.map(([k, v], i) => `<tr><td><input type="text" data-i="${i}" data-f="k" value="${esc(k)}" aria-label="Personne TeamSpeak">${k.startsWith("uid:") && nameOf(k.slice(4)) ? `<div class="muted">connecté : ${esc(nameOf(k.slice(4)))}</div>` : ""}</td>
-          <td><input type="text" data-i="${i}" data-f="v" value="${esc(v)}" aria-label="Nom de joueur"></td><td><button class="btn ghost danger" data-del="${i}">Retirer</button></td></tr>`).join("") || `<tr><td colspan="3" class="muted">Aucune identité.</td></tr>`}
+        <table class="table responsive"><thead><tr><th>Personne ou grade TeamSpeak</th><th>Nom de joueur</th><th>Administrateur</th><th></th></tr></thead><tbody>
+        ${rows.map(([k, v], i) => `<tr><td>${who(k)}</td>
+          <td><input type="text" data-i="${i}" value="${esc(v)}" aria-label="Nom de joueur" placeholder="Nom dans le jeu"></td>
+          <td><label class="switch"><input type="checkbox" data-admin="${i}" ${isAdmin(k) ? "checked" : ""} ${mine(k) ? `disabled data-disabled-reason="Tu ne peux pas retirer tes propres droits."` : ""}>Administrateur</label></td>
+          <td><button class="btn ghost danger" data-del="${i}">Retirer</button></td></tr>`).join("") || `<tr><td colspan="4" class="muted">Aucune identité.</td></tr>`}
         </tbody></table>
-        <div class="row"><select id="add-who" aria-label="Personne connectée"><option value="">Ajouter une personne connectée…</option>${online.map((c) => `<option value="${esc(c.uid)}">${esc(c.nickname)}</option>`).join("")}</select>
-          <button class="btn" id="add-group">Ajouter un grade</button></div></section>
+        <div class="row"><select id="add-who" aria-label="Ajouter une personne connectée"><option value="">Ajouter une personne connectée…</option>${online.filter((c) => !used.has(`uid:${c.uid}`)).map((c) => `<option value="${esc(c.uid)}">${esc(c.nickname)}</option>`).join("")}</select>
+          <select id="add-group" aria-label="Ajouter un grade"><option value="">Ajouter un grade…</option>${groups.filter((g) => !used.has(`group:${g}`)).map((g) => `<option value="${esc(g)}">${esc(g)}</option>`).join("")}</select></div>
+        <p class="muted">Les listes montrent les personnes et les grades connectés en ce moment. Une personne reconnue par son identifiant passe avant son grade.</p></section>
       <section class="panel stack"><h2>Ne pas transcrire</h2><p class="muted">Ces personnes ne sont jamais transcrites : leur voix n'atteint pas la transcription.</p>
         <ul class="people">${excluded.map((uid, i) => `<li>${esc(nameOf(uid) || uid)}<button class="btn ghost danger" style="margin-left:auto" data-unex="${i}">Retirer</button></li>`).join("") || `<li class="muted">Personne.</li>`}</ul>
         <select id="add-ex" aria-label="Exclure une personne connectée"><option value="">Exclure une personne connectée…</option>${online.filter((c) => !excluded.includes(c.uid)).map((c) => `<option value="${esc(c.uid)}">${esc(c.nickname)}</option>`).join("")}</select></section>
       <div class="row-end"><button class="btn primary" id="save">Enregistrer</button></div>`;
-    main.querySelectorAll("input[data-i]").forEach((el) => (el.oninput = () => { const r = rows[el.dataset.i]; r[el.dataset.f === "k" ? 0 : 1] = el.value; }));
-    main.querySelectorAll("[data-del]").forEach((b) => (b.onclick = () => { rows.splice(b.dataset.del, 1); draw(); }));
+    main.querySelectorAll("input[data-i]").forEach((el) => (el.oninput = () => { rows[el.dataset.i][1] = el.value; }));
+    main.querySelectorAll("[data-admin]").forEach((el) => (el.onchange = () => {
+      const k = rows[el.dataset.admin][0];
+      admins[kind(k)][el.checked ? "add" : "delete"](k.slice(k.indexOf(":") + 1));
+      adminsChanged = true;
+    }));
+    main.querySelectorAll("[data-del]").forEach((b) => (b.onclick = () => {
+      const [k] = rows[b.dataset.del];
+      if (mine(k)) return toast("Tu ne peux pas retirer ta propre ligne : tu perdrais l'accès à ces pages.", true);
+      if (isAdmin(k)) { admins[kind(k)].delete(k.slice(k.indexOf(":") + 1)); adminsChanged = true; }
+      rows.splice(b.dataset.del, 1); draw();
+    }));
     main.querySelectorAll("[data-unex]").forEach((b) => (b.onclick = () => { excluded.splice(b.dataset.unex, 1); draw(); }));
     $("#add-who").onchange = (e) => { const c = online.find((x) => x.uid === e.target.value); if (c) { rows.push([`uid:${c.uid}`, c.identity || c.nickname]); draw(); } };
-    $("#add-group").onclick = () => { rows.push(["group:", ""]); draw(); };
+    $("#add-group").onchange = (e) => { if (e.target.value) { rows.push([`group:${e.target.value}`, ""]); draw(); main.querySelector(`input[data-i="${rows.length - 1}"]`).focus(); } };
     $("#add-ex").onchange = (e) => { if (e.target.value) { excluded.push(e.target.value); draw(); } };
     $("#save").onclick = async () => {
-      try { await api("/api/settings", { identities: Object.fromEntries(rows), opt_out_uids: excluded }); toast("Enregistré. Clique sur « Appliquer » pour que le bot les prenne en compte."); refreshBanner(); }
-      catch (e) { toast(e.message, true); }
+      if (rows.some(([k, v]) => !v.trim() && !isAdmin(k))) return toast("Donne un nom de joueur à chaque ligne, coche « Administrateur », ou retire-la.", true);
+      try {
+        await api("/api/settings", { identities: Object.fromEntries(rows.filter(([, v]) => v.trim())), opt_out_uids: excluded,
+          ...(adminsChanged && { fields: { "web.admin_uids": [...admins.uid], "web.admin_groups": [...admins.group] } }) });
+        toast("Enregistré. Clique sur « Appliquer » pour que le bot les prenne en compte."); refreshBanner();
+      } catch (e) { toast(e.message, true); }
     };
   };
   draw();

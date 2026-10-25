@@ -48,6 +48,8 @@ class NamesTest(unittest.TestCase):
         }
         for heard, fixed in cases.items():
             self.assertEqual(fix_names(heard, self.NAMES), fixed, heard)
+        # The group's own words; the short word before one is kept (it used to be swallowed: "sur Claude" → "Claude").
+        self.assertEqual(fix_names("Tu vas sur Claude, ça arrive chez Gémini", ["Claude", "Gemini"]), "Tu vas sur Claude, ça arrive chez Gemini")
 
 
 class GeminiTest(unittest.TestCase):

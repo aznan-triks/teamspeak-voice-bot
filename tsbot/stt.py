@@ -47,6 +47,9 @@ def fix_names(text: str, names) -> str:
             key = sound_key("".join(chunk))
             if len(key) < 4:
                 continue
+            # "sur Claude" sounds close to "Claude" too: when the last word alone is the name, keep the first word.
+            if size == 2 and difflib.get_close_matches(sound_key(chunk[-1]), keys, n=1, cutoff=0.8):
+                continue
             match = difflib.get_close_matches(key, keys, n=1, cutoff=0.8)
             if match:
                 best = (keys[match[0]], 2 * size - 1)

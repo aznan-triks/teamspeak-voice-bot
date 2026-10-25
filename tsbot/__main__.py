@@ -112,6 +112,7 @@ def spawn_bridge(ts: dict) -> subprocess.Popen:
         "TS_NICKNAME": ts.get("nickname", "VoiceBot"),
         "TS_IDENTITY_FILE": ts.get("identity_file", "data/identity.json"),
         "TS_MAX_UTTERANCE_S": str(ts.get("max_utterance_s", 30)),
+        "TS_JOIN_GAP_MS": str(ts.get("join_gap_ms", 1000)),
     })
     if ts.get("channel"):
         env["TS_CHANNEL"] = ts["channel"]
@@ -160,7 +161,7 @@ def run(cfg: dict, logs=None) -> None:
             except Exception:
                 ctx = {}
             found += [n for v in ctx.values() if isinstance(v, list) for n in v if isinstance(n, str)]
-        return found + cfg.get("llm", {}).get("wake_words", [])
+        return found + cfg.get("llm", {}).get("wake_words", []) + cfg.get("stt", {}).get("vocabulary", [])
 
     transcribe.names = names
     if cfg.get("web", {}).get("control", True):
