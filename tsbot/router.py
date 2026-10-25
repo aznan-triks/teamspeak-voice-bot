@@ -65,6 +65,7 @@ class Router:
         if cfg.get("personality"):
             self.prompt += "\nPERSONNALITÉ :\n" + cfg["personality"].strip() + "\n"
         self.conversing_until = 0.0  # after the bot answered, people can go on talking to it without its name
+        self.started_at = time.time()  # the bot is asked why it left: it was restarted (updates)
         self.partner, self.replied_ms = None, 0  # who the bot last answered, and when it started saying it (Unix ms)
         self.wake_words = cfg.get("wake_words", ["hector"])
         one = [w for w in self.wake_words if " " not in w.strip()]
@@ -159,6 +160,7 @@ class Router:
             "EN ATTENTE :", json.dumps(pending, ensure_ascii=False),
             "TRANSCRIPTION :", *self.bot.window,
             # Last: a line that changes after the transcription keeps the LLM's cache of what comes before.
+            f"BOT : en ligne depuis {int((time.time() - self.started_at) // 60)} min",
             f"CONVERSATION EN COURS : {'oui' if getattr(self, 'following', False) else 'non'}",
             f"APPELÉ PAR SON NOM : {'oui' if getattr(self, 'addressed', False) else 'non'}",
         ])
