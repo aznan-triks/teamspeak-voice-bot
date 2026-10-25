@@ -1,15 +1,15 @@
 """Management site: login by TeamSpeak code, roles, private sentences, settings, statistics. No network, no bot."""
 import io
 import json
+from pathlib import Path
 import tempfile
 import time
 import unittest
-from pathlib import Path
 
 from tsbot.archive import Archive
 from tsbot.plugins import ProposedAction, Speaker
 from tsbot.web.__main__ import route
-from tsbot.web.app import MASK, App, HttpError
+from tsbot.web.app import MASK, App, HttpError, _TRANSLATIONS, tr
 
 ADMIN = {"client_id": 3, "uid": "admin=", "nickname": "Chef", "server_groups": ["Server Admin"], "identity": "Chef", "channel_id": 2, "hearing": True}
 MEMBER = {"client_id": 4, "uid": "member=", "nickname": "Bob", "server_groups": ["Guest"], "identity": "Bob", "channel_id": 7, "hearing": False}
@@ -26,7 +26,8 @@ class FakeBot:
         body = json.loads(req.data) if req.data else {}
         if path == "/state":
             data = {"started_ms": 0, "me": {"client_id": 1, "channel_id": 7},
-                    "clients": [{"client_id": 1, "uid": "bot=", "channel_id": 7}, ADMIN, MEMBER]}
+                    "clients": [{"client_id": 1, "uid": "bot=", "channel_id": 7}, ADMIN, MEMBER],
+                    "speaking": []}
         elif path == "/message":
             self.messages.append(body)
             data = {"sent": True}
@@ -159,6 +160,33 @@ class WebTest(unittest.TestCase):
         self.assertIn("error", self.call(admin, "POST", "/api/services", {"name": "web", "action": "stop"}))
         self.assertIn("error", self.call(admin, "POST", "/api/services", {"name": "llm", "action": "rm -rf"}))
         self.assertIn("error", self.call(self.login(MEMBER), "GET", "/api/services"))
+
+    def test_multilingual_errors_and_fallback(self):
+        member = self.login(MEMBER)
+        # Default language (French) vs English error message
+        self.assertEqual(self.call(None, "GET", "/api/me"), {"error": "Connecte-toi d'abord."})
+        self.assertEqual(self.call(None, "GET", "/api/me", query={"lang": ["en"]}), {"error": "Please log in first."})
+        self.assertEqual(self.call(member, "GET", "/api/stats", query={"lang": ["en"]}), {"error": "Admins only."})
+
+        # Presence reason in French vs English
+        reason_fr = self.app.presence(MEMBER["uid"], lang="fr")["reason"]
+        reason_en = self.app.presence(MEMBER["uid"], lang="en")["reason"]
+        self.assertIn("casque", reason_fr)
+        self.assertIn("headset", reason_en)
+
+        # Settings labels and help texts in French vs English
+        settings_fr = self.app.settings(lang="fr")
+        settings_en = self.app.settings(lang="en")
+        addr_fr = next(f for f in settings_fr["fields"] if f["key"] == "address")
+        addr_en = next(f for f in settings_en["fields"] if f["key"] == "address")
+        self.assertEqual(addr_fr["label"], "Adresse du serveur TeamSpeak")
+        self.assertEqual(addr_en["label"], "TeamSpeak Server Address")
+
+        # Missing key in en falls back to French
+        _TRANSLATIONS.setdefault("fr", {})["test_fallback_key"] = "Valeur en français"
+        _TRANSLATIONS.setdefault("en", {}).pop("test_fallback_key", None)
+        self.assertEqual(tr("test_fallback_key", "en"), "Valeur en français")
+        _TRANSLATIONS["fr"].pop("test_fallback_key", None)
 
 
 class OldArchiveTest(unittest.TestCase):
