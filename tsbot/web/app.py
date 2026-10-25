@@ -13,6 +13,7 @@ import importlib
 import json
 import logging
 import os
+from pathlib import Path
 import secrets
 import shutil
 import sqlite3
@@ -20,7 +21,6 @@ import subprocess
 import time
 import urllib.error
 import urllib.request
-from pathlib import Path
 
 from tsbot.voice import DEFAULT_PHRASES
 
@@ -28,8 +28,52 @@ log = logging.getLogger(__name__)
 
 SECRET = "secret"  # settings field type: never sent back to the browser
 MASK = "••••••••"
+I18N_DIR = Path(__file__).parent / "static" / "i18n"
 
-# Every setting the site can change: (section, key, type, label, help). Read by the settings page.
+
+def _load_translations() -> dict[str, dict[str, str]]:
+    translations: dict[str, dict[str, str]] = {}
+    if I18N_DIR.is_dir():
+        for file in I18N_DIR.glob("*.json"):
+            try:
+                translations[file.stem] = json.loads(file.read_text(encoding="utf-8"))
+            except Exception:
+                log.exception("failed to load translations from %s", file)
+    return translations
+
+
+_TRANSLATIONS = _load_translations()
+
+# Backward-compatible mapping for legacy French error strings.
+LEGACY_KEYS = {
+    "Connecte-toi d'abord.": "error.login_required",
+    "Réservé aux administrateurs.": "error.admin_only",
+    "Page inconnue.": "error.page_not_found",
+    "JSON attendu.": "error.json_expected",
+    "Action inconnue.": "error.action_unknown",
+    "Plugin inconnu.": "error.plugin_unknown",
+    "Service inconnu.": "error.service_unknown",
+}
+
+
+def tr(key_or_msg: str, lang: str = "fr", **kwargs) -> str:
+    """Translates a key into the target language, falling back to French, then key itself."""
+    canonical_key = LEGACY_KEYS.get(key_or_msg, key_or_msg)
+    dict_lang = _TRANSLATIONS.get(lang, {})
+    msg = dict_lang.get(canonical_key)
+    if not msg and lang != "fr":
+        msg = _TRANSLATIONS.get("fr", {}).get(canonical_key)
+    if not msg:
+        msg = key_or_msg
+    if kwargs:
+        try:
+            return msg.format(**kwargs)
+        except Exception:
+            return msg
+    return msg
+
+
+# Every setting the site can change: (section, key, type, fallback_label, fallback_help).
 FIELDS = [
     ("teamspeak", "address", "str", "Adresse du serveur TeamSpeak", "Adresse IP ou nom, avec « :port » si ce n'est pas 9987."),
     ("teamspeak", "server_password", SECRET, "Mot de passe du serveur", "Laisse vide si le serveur n'en a pas. Jamais affiché."),
@@ -83,9 +127,16 @@ def get_path(cfg: dict, dotted: str) -> dict:
 
 
 class HttpError(Exception):
-    def __init__(self, status: int, message: str):
-        super().__init__(message)
+    def __init__(self, status: int, message_or_key: str, lang: str = "fr", **kwargs):
         self.status = status
+        self.key = message_or_key
+        self.lang = lang
+        self.kwargs = kwargs
+        msg = tr(message_or_key, lang, **kwargs)
+        super().__init__(msg)
+
+    def localized(self, lang: str | None = None) -> str:
+        return tr(self.key, lang or self.lang, **self.kwargs)
 
 
 class App:
@@ -104,18 +155,26 @@ class App:
         self.codes: dict = {}  # client_id -> pending login code
         self.services = web.get("services", [])  # systemd user units the site may start, stop and read
 
+    @staticmethod
+    def available_languages() -> list[str]:
+        return sorted(_TRANSLATIONS.keys()) or ["fr", "en"]
+
     # --- the running bot ---
 
-    def bot(self, method: str, path: str, body: dict | None = None, raw: bool = False):
+    def bot(self, method: str, path: str, body: dict | None = None, raw: bool = False, lang: str = "fr"):
         url = f"http://127.0.0.1:{self.web.get('control_port', 8096)}{path}"
         data = json.dumps(body).encode() if body is not None else (b"" if method == "POST" else None)
-        req = urllib.request.Request(url, data, {"Authorization": f"Bearer {self.token_file.read_text().strip()}",
-                                                 "Content-Type": "application/json"}, method=method)
+        req = urllib.request.Request(
+            url,
+            data,
+            {"Authorization": f"Bearer {self.token_file.read_text().strip()}", "Content-Type": "application/json"},
+            method=method,
+        )
         try:
             with self.opener(req, timeout=self.web.get("bot_timeout_s", 60)) as r:
                 content = r.read()
         except (urllib.error.URLError, OSError, FileNotFoundError) as error:
-            raise HttpError(503, f"Le bot ne répond pas ({error}). Il redémarre peut-être.")
+            raise HttpError(503, "error.bot_down", lang=lang, error=str(error))
         return content if raw else json.loads(content)
 
     # --- sessions ---
@@ -147,49 +206,69 @@ class App:
     def login_clients(self) -> list:
         state = self.bot("GET", "/state")
         me = (state.get("me") or {}).get("client_id")
-        return sorted(({"client_id": c["client_id"], "nickname": c.get("nickname", "?")}
-                       for c in state["clients"] if c.get("uid") and c["client_id"] != me), key=lambda c: c["nickname"].lower())
+        return sorted(
+            (
+                {"client_id": c["client_id"], "nickname": c.get("nickname", "?")}
+                for c in state["clients"]
+                if c.get("uid") and c["client_id"] != me
+            ),
+            key=lambda c: c["nickname"].lower(),
+        )
 
     def bot_name(self) -> str:
         """The name shown on the site: the bot's TeamSpeak nickname without its "(…)" part."""
         nick = self.current_config().get("teamspeak", {}).get("nickname", "Bot")
         return nick.split("(")[0].strip() or nick
 
-    def login_start(self, client_id: int, site_url: str = "") -> dict:
+    def login_start(self, client_id: int, site_url: str = "", lang: str = "fr") -> dict:
+        if not isinstance(client_id, int) or client_id <= 0:
+            raise HttpError(400, "error.invalid_value", lang=lang, name="client_id")
         pending = self.codes.get(client_id)
         if pending and time.time() - pending["sent"] < self.web.get("code_resend_s", 30):
-            raise HttpError(429, "Un code vient d'être envoyé : attends quelques secondes avant d'en redemander un.")
+            raise HttpError(429, "error.code_throttled", lang=lang)
         client = next((c for c in self.bot("GET", "/state")["clients"] if c["client_id"] == client_id), None)
         if client is None or not client.get("uid"):
-            raise HttpError(404, "Cette personne n'est plus connectée au serveur.")
+            raise HttpError(404, "error.person_not_connected", lang=lang)
         code = f"{secrets.randbelow(1_000_000):06d}"
         ttl = self.web.get("code_ttl_s", 300)
         self.codes[client_id] = {"code": code, "client": client, "sent": time.time(), "exp": time.time() + ttl, "tries": 0}
         name = self.bot_name()
         link = f" Ou clique : {site_url}/?login={client_id}-{code}" if site_url else ""
-        # The poke (100 characters at most) carries the code; the private message adds a link that logs in by itself.
-        self.bot("POST", "/message", {"client_id": client_id, "poke": True, "text":
-                 f"Code du site de {name} : {code} (5 min).{link} Si tu n'as rien demandé, ignore ce message."})
+        # The poke carries the code; the private message adds an automatic login link.
+        self.bot(
+            "POST",
+            "/message",
+            {
+                "client_id": client_id,
+                "poke": True,
+                "text": f"Code du site de {name} : {code} (5 min).{link} Si tu n'as rien demandé, ignore ce message.",
+            },
+        )
         log.info("login code sent to %s (client %d)", client.get("nickname"), client_id)
         return {"sent": True, "ttl_s": ttl}
 
-    def login_finish(self, client_id: int, code: str) -> tuple[dict, str]:
+    def login_finish(self, client_id: int, code: str, lang: str = "fr") -> tuple[dict, str]:
         pending = self.codes.get(client_id)
         if not pending or pending["exp"] < time.time():
-            raise HttpError(400, "Code expiré ou jamais demandé : redemande un code.")
+            raise HttpError(400, "error.code_expired", lang=lang)
         pending["tries"] += 1
         if pending["tries"] > self.web.get("code_tries", 5):
             del self.codes[client_id]
-            raise HttpError(429, "Trop d'essais : redemande un code.")
+            raise HttpError(429, "error.too_many_tries", lang=lang)
         if not hmac.compare_digest(pending["code"], str(code).strip()):
             log.warning("wrong login code for %s (try %d)", pending["client"].get("nickname"), pending["tries"])
-            raise HttpError(400, "Code incorrect : vérifie les 6 chiffres reçus dans TeamSpeak.")
+            raise HttpError(400, "error.code_incorrect", lang=lang)
         del self.codes[client_id]
         c = pending["client"]
         log.info("%s logged in", c.get("nickname"))
-        user = {"uid": c["uid"], "nickname": c.get("nickname"), "identity": c.get("identity"),
-                "groups": c.get("server_groups") or [], "admin": self.is_admin(c["uid"], c.get("server_groups") or []),
-                "exp": time.time() + self.web.get("session_days", 30) * 86400}
+        user = {
+            "uid": c["uid"],
+            "nickname": c.get("nickname"),
+            "identity": c.get("identity"),
+            "groups": c.get("server_groups") or [],
+            "admin": self.is_admin(c["uid"], c.get("server_groups") or []),
+            "exp": time.time() + self.web.get("session_days", 30) * 86400,
+        }
         return user, self.sign(user)
 
     # --- archive (read only) ---
@@ -200,6 +279,8 @@ class App:
         return con
 
     def my_phrases(self, uid: str, q: str = "", before_id: int = 0, limit: int = 50) -> list:
+        before_id = max(0, before_id)
+        limit = max(1, min(limit, 200))
         sql = "SELECT id, started_ms, duration_ms, text FROM utterances WHERE uid = ?"
         args: list = [uid]
         if q:
@@ -209,39 +290,45 @@ class App:
             sql += " AND id < ?"
             args.append(before_id)
         with closing(self.db()) as con:
-            return [dict(r) for r in con.execute(sql + " ORDER BY id DESC LIMIT ?", [*args, min(limit, 200)])]
+            return [dict(r) for r in con.execute(sql + " ORDER BY id DESC LIMIT ?", [*args, limit])]
 
     # A sentence may be read by its author and by the people who could hear it when it was said.
     HEARD = "(uid = ? OR EXISTS (SELECT 1 FROM json_each(COALESCE(listeners, '[]')) WHERE value = ?))"
 
     def conversation(self, uid: str, after_id: int = 0, limit: int = 60) -> list:
         """What this person could hear, oldest first: the last `limit` sentences, or the new ones after `after_id`."""
+        after_id = max(0, after_id)
+        limit = max(1, min(limit, 200))
         with closing(self.db()) as con:
             rows = con.execute(
                 f"SELECT id, started_ms, COALESCE(identity, nickname) AS name, uid = ? AS mine, text FROM utterances "
-                f"WHERE {self.HEARD} AND id > ? ORDER BY id DESC LIMIT ?", (uid, uid, uid, after_id, min(limit, 200))).fetchall()
+                f"WHERE {self.HEARD} AND id > ? ORDER BY id DESC LIMIT ?",
+                (uid, uid, uid, after_id, limit),
+            ).fetchall()
         return [dict(r) for r in reversed(rows)]
 
-    def presence(self, uid: str) -> dict:
+    def presence(self, uid: str, lang: str = "fr") -> dict:
         """Can this person hear the bot's channel right now? Says why not, in plain words."""
         try:
             state = self.bot("GET", "/state")
         except HttpError:
-            return {"hearing": False, "reason": "Le bot n'est pas connecté pour l'instant."}
+            return {"hearing": False, "reason": tr("presence.bot_offline", lang)}
         bot_channel = (state.get("me") or {}).get("channel_id")
         me = next((c for c in state["clients"] if c.get("uid") == uid), None)
         if me is None:
-            return {"hearing": False, "reason": "Tu n'es pas connecté au serveur TeamSpeak."}
+            return {"hearing": False, "reason": tr("presence.user_offline", lang)}
         if me.get("channel_id") != bot_channel:
-            return {"hearing": False, "reason": f"Tu n'es pas dans le salon de {self.bot_name()}."}
+            return {"hearing": False, "reason": tr("presence.wrong_channel", lang, name=self.bot_name())}
         if not me.get("hearing"):
-            return {"hearing": False, "reason": "Ton casque est coupé : tu n'entends pas le salon."}
+            return {"hearing": False, "reason": tr("presence.deaf", lang)}
         return {"hearing": True, "reason": ""}
 
     def actions(self, uid: str, admin: bool, before_id: int = 0, limit: int = 50) -> list:
+        before_id = max(0, before_id)
+        limit = max(1, min(limit, 200))
         sql = "SELECT * FROM actions" + (" WHERE id < ?" if before_id else "") + " ORDER BY id DESC LIMIT ?"
         with closing(self.db()) as con:
-            rows = [dict(r) for r in con.execute(sql, [before_id, min(limit, 200)] if before_id else [min(limit, 200)])]
+            rows = [dict(r) for r in con.execute(sql, [before_id, limit] if before_id else [limit])]
             for row in rows:
                 row["args"] = json.loads(row["args"])
                 ids = json.loads(row.pop("utterance_ids") or "[]")
@@ -249,11 +336,14 @@ class App:
                 # The sentence that asked for it: only for its author and the people who could hear it.
                 row["sentence"] = None
                 if ids:
-                    found = con.execute(f"SELECT text FROM utterances WHERE id = ? AND {self.HEARD}", (ids[0], uid, uid)).fetchone()
+                    found = con.execute(
+                        f"SELECT text FROM utterances WHERE id = ? AND {self.HEARD}", (ids[0], uid, uid)
+                    ).fetchone()
                     row["sentence"] = found["text"] if found else None
         return rows
 
     def stats(self, days: int = 30) -> dict:
+        days = max(1, min(days, 3650))
         since = int((time.time() - days * 86400) * 1000)
 
         def spread(values: list) -> dict:
@@ -270,14 +360,23 @@ class App:
                 "stt_ms": spread([r[0] for r in q("SELECT stt_ms FROM utterances WHERE started_ms > ? AND stt_ms IS NOT NULL")]),
                 "llm_ms": spread([r[0] for r in q("SELECT ms FROM llm_calls WHERE started_ms > ? AND ok = 1")]),
                 "llm_failures": q("SELECT COUNT(*) FROM llm_calls WHERE started_ms > ? AND ok = 0")[0][0],
-                "speakers": [dict(r) for r in q(
-                    "SELECT COALESCE(identity, nickname) AS name, COUNT(*) AS phrases, SUM(duration_ms) AS ms FROM utterances "
-                    "WHERE started_ms > ? AND stt_ms IS NOT NULL GROUP BY name ORDER BY ms DESC LIMIT 15")],
-                "per_day": [dict(r) for r in q(
-                    "SELECT date(started_ms / 1000, 'unixepoch', 'localtime') AS day, COUNT(*) AS phrases FROM utterances "
-                    "WHERE started_ms > ? AND stt_ms IS NOT NULL GROUP BY day ORDER BY day")],
-                "actions": [dict(r) for r in q(
-                    "SELECT status, COUNT(*) AS n FROM actions WHERE created_ms > ? GROUP BY status ORDER BY n DESC")],
+                "speakers": [
+                    dict(r)
+                    for r in q(
+                        "SELECT COALESCE(identity, nickname) AS name, COUNT(*) AS phrases, SUM(duration_ms) AS ms FROM utterances "
+                        "WHERE started_ms > ? AND stt_ms IS NOT NULL GROUP BY name ORDER BY ms DESC LIMIT 15"
+                    )
+                ],
+                "per_day": [
+                    dict(r)
+                    for r in q(
+                        "SELECT date(started_ms / 1000, 'unixepoch', 'localtime') AS day, COUNT(*) AS phrases FROM utterances "
+                        "WHERE started_ms > ? AND stt_ms IS NOT NULL GROUP BY day ORDER BY day"
+                    )
+                ],
+                "actions": [
+                    dict(r) for r in q("SELECT status, COUNT(*) AS n FROM actions WHERE created_ms > ? GROUP BY status ORDER BY n DESC")
+                ],
             }
 
     # --- settings ---
@@ -298,17 +397,27 @@ class App:
         plugins = self.current_config().get("plugins", {})
         return sorted(found | set(plugins.get("enabled", [])) | {k for k, v in plugins.items() if isinstance(v, dict)})
 
-    def settings(self) -> dict:
+    def settings(self, lang: str = "fr") -> dict:
         cfg = self.current_config()
         plugins = cfg.get("plugins", {})
-        sections = {name: {k: (MASK if k in ("password", "api_key", "token") and v else v)
-                           for k, v in plugins.get(name, {}).items()} for name in self.plugin_names()}
+        sections = {
+            name: {k: (MASK if k in ("password", "api_key", "token") and v else v) for k, v in plugins.get(name, {}).items()}
+            for name in self.plugin_names()
+        }
         return {
-            "fields": [{"section": s, "key": k, "type": t, "label": label, "help": h,
-                        "value": (MASK if get_path(cfg, s).get(k) else "") if t == SECRET else get_path(cfg, s).get(k),
-                        **({"type": "choice:" + ",".join(["default", *self.voice_names()])} if t == "voice" else {}),
-                        "default": DEFAULT_PHRASES.get(k) if s == "voice.phrases" else None}
-                       for s, k, t, label, h in FIELDS],
+            "fields": [
+                {
+                    "section": s,
+                    "key": k,
+                    "type": t,
+                    "label": tr(f"field.{s}.{k}.label", lang) if tr(f"field.{s}.{k}.label", lang) != f"field.{s}.{k}.label" else label,
+                    "help": tr(f"field.{s}.{k}.help", lang) if tr(f"field.{s}.{k}.help", lang) != f"field.{s}.{k}.help" else h,
+                    "value": (MASK if get_path(cfg, s).get(k) else "") if t == SECRET else get_path(cfg, s).get(k),
+                    **({"type": "choice:" + ",".join(["default", *self.voice_names()])} if t == "voice" else {}),
+                    "default": DEFAULT_PHRASES.get(k) if s == "voice.phrases" else None,
+                }
+                for s, k, t, label, h in FIELDS
+            ],
             "identities": cfg.get("identities", {}),
             "opt_out_uids": cfg.get("privacy", {}).get("opt_out_uids", []),
             "plugins": {"enabled": plugins.get("enabled", []), "available": self.plugin_names(), "config": sections},
@@ -325,33 +434,43 @@ class App:
         except HttpError:
             return 0
 
-    def save_settings(self, changes: dict) -> dict:
+    def save_settings(self, changes: dict, lang: str = "fr") -> dict:
         """`changes`: {"fields": {"llm.wake_words": [...]}, "identities": {...}, "opt_out_uids": [...], "plugins": {...}}."""
+        if not isinstance(changes, dict):
+            raise HttpError(400, "error.invalid_value", lang=lang, name="changes")
         overlay = self.overlay()
-        known = {f"{s}.{k}": ("choice:" + ",".join(["default", *self.voice_names()]) if t == "voice" else t) for s, k, t, *_ in FIELDS}
+        known = {
+            f"{s}.{k}": ("choice:" + ",".join(["default", *self.voice_names()]) if t == "voice" else t)
+            for s, k, t, *_ in FIELDS
+        }
         for dotted, value in changes.get("fields", {}).items():
             kind = known.get(dotted)
             if kind is None:
-                raise HttpError(400, f"Réglage inconnu : {dotted}")
+                raise HttpError(400, "error.setting_unknown", lang=lang, dotted=dotted)
             section, key = dotted.rsplit(".", 1)
             target = overlay
             for part in section.split("."):
                 target = target.setdefault(part, {})
             if kind == SECRET and value == MASK:
                 continue  # left as is: keep the saved password
-            target[key] = self.checked("str" if kind == SECRET else kind, value, dotted)
+            target[key] = self.checked("str" if kind == SECRET else kind, value, dotted, lang=lang)
         if "identities" in changes:
             table = changes["identities"]
-            if not all(isinstance(k, str) and k.startswith(("uid:", "group:")) and isinstance(v, str) and v.strip() for k, v in table.items()):
-                raise HttpError(400, "Chaque identité associe « uid:… » ou « group:… » à un nom non vide.")
+            if not isinstance(table, dict) or not all(
+                isinstance(k, str) and k.startswith(("uid:", "group:")) and isinstance(v, str) and v.strip()
+                for k, v in table.items()
+            ):
+                raise HttpError(400, "error.identities_format", lang=lang)
             overlay["identities"] = {k: v.strip() for k, v in table.items()}
         if "opt_out_uids" in changes:
-            overlay.setdefault("privacy", {})["opt_out_uids"] = self.checked("list", changes["opt_out_uids"], "exclusions")
+            overlay.setdefault("privacy", {})["opt_out_uids"] = self.checked("list", changes["opt_out_uids"], "exclusions", lang=lang)
         if "plugins" in changes:
             p = changes["plugins"]
+            if not isinstance(p, dict):
+                raise HttpError(400, "error.invalid_value", lang=lang, name="plugins")
             plugins = overlay.setdefault("plugins", {})
             if "enabled" in p:
-                plugins["enabled"] = self.checked("list", p["enabled"], "plugins")
+                plugins["enabled"] = self.checked("list", p["enabled"], "plugins", lang=lang)
             for name, section in p.get("config", {}).items():
                 old = get_path(self.current_config(), "plugins").get(name, {})
                 # A masked secret left as is keeps its saved value.
@@ -360,10 +479,10 @@ class App:
         tmp.write_text(json.dumps(overlay, ensure_ascii=False, indent=2), encoding="utf-8")
         tmp.chmod(0o600)  # may hold plugin passwords
         tmp.replace(self.settings_file)
-        return self.settings()
+        return self.settings(lang=lang)
 
     @staticmethod
-    def checked(kind: str, value, name: str):
+    def checked(kind: str, value, name: str, lang: str = "fr"):
         if kind == "bool" and isinstance(value, bool):
             return value
         if kind == "int" and isinstance(value, int) and not isinstance(value, bool) and value >= 0:
@@ -374,58 +493,72 @@ class App:
             return [v.strip() for v in value if v.strip()]
         if kind.startswith("choice:") and value in kind[7:].split(","):
             return value
-        raise HttpError(400, f"Valeur invalide pour {name}.")
+        raise HttpError(400, "error.invalid_value", lang=lang, name=name)
 
-    def test_plugin(self, name: str) -> dict:
+    def test_plugin(self, name: str, lang: str = "fr") -> dict:
         """Starts the plugin here with its saved settings, the way the bot would, and reports what it sees."""
         if name not in self.plugin_names():
-            raise HttpError(404, "Plugin inconnu.")
+            raise HttpError(404, "error.plugin_unknown", lang=lang)
         section = get_path(self.current_config(), "plugins").get(name, {})
         try:
             plugin = importlib.import_module(name).Plugin(section)
             context = plugin.context() if hasattr(plugin, "context") else {}
             actions = [a.name for a in plugin.actions()] if hasattr(plugin, "actions") else []
         except Exception as error:
+            log.info("test_plugin %s encountered error: %s", name, error)
             return {"ok": False, "error": str(error)}
         summary = {k: (len(v) if isinstance(v, (list, dict)) else str(v)[:80]) for k, v in context.items()}
         empty = context and not any(v for v in context.values())
-        return {"ok": not empty, "actions": actions, "context": summary,
-                "error": "Le plugin démarre mais ne reçoit aucune donnée : vérifie l'adresse et le compte." if empty else None}
+        return {
+            "ok": not empty,
+            "actions": actions,
+            "context": summary,
+            "error": tr("error.plugin_empty_data", lang) if empty else None,
+        }
 
     # --- services (systemd user units on this machine) ---
 
-    def _unit(self, name: str) -> str:
+    def _unit(self, name: str, lang: str = "fr") -> str:
         if name not in self.services:
-            raise HttpError(404, "Service inconnu.")
+            raise HttpError(404, "error.service_unknown", lang=lang)
         return name
 
-    def service_list(self) -> list:
+    def service_list(self, lang: str = "fr") -> list:
         if self.services and not shutil.which("systemctl"):
-            raise HttpError(503, "Pas de systemd sur cette machine : la page Services ne peut pas fonctionner ici.")
+            raise HttpError(503, "error.no_systemd", lang=lang)
         out = []
         for name in self.services:
-            r = subprocess.run(["systemctl", "--user", "show", name, "--timestamp=unix",
-                                "-p", "ActiveState", "-p", "SubState", "-p", "ActiveEnterTimestamp", "-p", "NRestarts"],
-                               capture_output=True, text=True, timeout=10)
-            props = dict(line.split("=", 1) for line in r.stdout.splitlines() if "=" in line)  # systemctl picks the order
-            out.append({"name": name, "active": props.get("ActiveState", ""), "sub": props.get("SubState", ""),
-                        "since": props.get("ActiveEnterTimestamp", ""), "restarts": props.get("NRestarts", "0")})
+            r = subprocess.run(
+                ["systemctl", "--user", "show", name, "--timestamp=unix",
+                 "-p", "ActiveState", "-p", "SubState", "-p", "ActiveEnterTimestamp", "-p", "NRestarts"],
+                capture_output=True, text=True, timeout=10,
+            )
+            props = dict(line.split("=", 1) for line in r.stdout.splitlines() if "=" in line)
+            out.append({
+                "name": name,
+                "active": props.get("ActiveState", ""),
+                "sub": props.get("SubState", ""),
+                "since": props.get("ActiveEnterTimestamp", ""),
+                "restarts": props.get("NRestarts", "0"),
+            })
         return out
 
-    def service_action(self, name: str, action: str) -> dict:
-        unit = self._unit(name)
+    def service_action(self, name: str, action: str, lang: str = "fr") -> dict:
+        unit = self._unit(name, lang=lang)
         if action not in ("start", "stop", "restart"):
-            raise HttpError(400, "Action inconnue.")
+            raise HttpError(400, "error.action_unknown", lang=lang)
         if action == "stop" and unit == self.web.get("self_service", "web"):
-            raise HttpError(400, "Le site ne peut pas s'arrêter lui-même : tu ne pourrais plus le relancer. Utilise « Redémarrer ».")
+            raise HttpError(400, "error.cannot_stop_self", lang=lang)
         log.info("service %s: %s", unit, action)
-        # Not waited for: restarting the site itself ends this process.
         subprocess.Popen(["systemctl", "--user", action, unit], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         return {"ok": True}
 
-    def service_logs(self, name: str, lines: int = 200) -> list:
-        unit = self._unit(name)
-        r = subprocess.run(["journalctl", "--user", "-u", unit, "-n", str(min(lines, 1000)), "-o", "short-iso", "--no-pager"],
-                           capture_output=True, text=True, timeout=20)
+    def service_logs(self, name: str, lines: int = 200, lang: str = "fr") -> list:
+        unit = self._unit(name, lang=lang)
+        lines = max(1, min(lines, 1000))
+        r = subprocess.run(
+            ["journalctl", "--user", "-u", unit, "-n", str(lines), "-o", "short-iso", "--no-pager"],
+            capture_output=True, text=True, timeout=20,
+        )
         noise = ("RSA puzzle", "Unknown argument", "tsproto::resend", "image pull", "container ")
         return [line for line in r.stdout.splitlines() if not any(n in line for n in noise)]
