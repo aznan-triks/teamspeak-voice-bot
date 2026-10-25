@@ -51,6 +51,12 @@ class Router:
         self.actions = {a.name: (p, a) for p in self.loaded if hasattr(p, "actions") for a in p.actions()}
         if not self.llm.ping():
             self._degrade(time.monotonic() if now is None else now)
+        elif self.cfg.get("warm_up", False):
+            # The LLM reads the long prompt once now, so the first real question is answered fast.
+            try:
+                self.llm.chat(self.prompt, self.user_message())
+            except Exception as error:
+                log.warning("LLM warm-up failed: %s", error)
 
     def handle(self, t, now: float | None = None) -> None:
         now = time.monotonic() if now is None else now

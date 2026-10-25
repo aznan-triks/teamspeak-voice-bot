@@ -119,6 +119,15 @@ class RouterTest(unittest.TestCase):
         self.hear(ALICE, "oui", now=3)  # 1 s of LLM + 1 s of speech + 0.5 s to answer: still in time
         self.assertEqual(self.statuses(), ["done"])
 
+    def test_warm_up_reads_the_prompt_once_at_start(self):
+        llm = FakeLLM({"type": "ignore"}, RuntimeError("down"))
+        self.setup(llm)
+        self.assertEqual(llm.calls, 0)  # off by default
+        self.router.cfg["warm_up"] = True
+        self.router.start(now=0)
+        self.router.start(now=0)  # a failed warm-up is not a failure of the bot
+        self.assertEqual((llm.calls, self.router.degraded, self.router.failures), (2, False, 0))
+
     def test_correction_with_wake_word_goes_to_the_llm(self):
         llm = FakeLLM(PROPOSE, dict(PROPOSE, args={"player": "Alice", "points": 2}, confirm_text="Deux points pour Alice ?"))
         self.setup(llm)

@@ -110,10 +110,12 @@ The bot needs an LLM server to understand requests. Any OpenAI-compatible server
 On the PC that will run the LLM (it can be the same machine as the bot, but a small server is better off sending this work to a bigger PC):
 
 ```bash
-docker run -d --name llm --restart unless-stopped -p 8080:8080 -v llm-models:/root/.cache/huggingface ghcr.io/ggml-org/llama.cpp:server -hf unsloth/Qwen3.5-4B-GGUF:Q4_K_M --no-mmproj --host 0.0.0.0 --port 8080 -c 8192 --jinja --reasoning-budget 0 --api-key choose-a-long-password
+docker run -d --name llm --restart unless-stopped -p 8080:8080 -v llm-models:/root/.cache/huggingface ghcr.io/ggml-org/llama.cpp:server -hf unsloth/Qwen3.5-4B-GGUF:Q4_K_M --no-mmproj --host 0.0.0.0 --port 8080 -c 8192 --jinja --reasoning-budget 0 -ub 128 -cms 64 --api-key choose-a-long-password
 ```
 
 The first start downloads the model (about 2.7 GB). It uses about 3 GB of RAM.
+
+`-ub 128 -cms 64` matter on a small CPU: Qwen3.5 can only reuse what it already read from saved checkpoints, and these two options save them often. On an Intel i5-1135G7 (4 cores), a follow-up question takes 5 to 8 seconds instead of 11 to 16.
 
 ### 2. Point the bot to it
 

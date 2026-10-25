@@ -50,6 +50,7 @@ json_mode = true          # ask for strict JSON; turn off if your provider refus
 wake_words = ["hector"]   # say it to talk to the bot ("Hector, ..."): tested to survive speech-to-text
 confirm_timeout_s = 20    # time to say "oui" or "non" after the bot asks
 max_failures = 3          # failures in a row before degraded mode
+warm_up = true            # read the prompt once at start: the first question is answered much faster
 probe_interval_s = 300    # in degraded mode, check the LLM again this often
 prompt_file = "prompts/system_fr.txt"
 
