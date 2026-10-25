@@ -229,6 +229,11 @@ class RouterTest(unittest.TestCase):
                       "C'est un PD botop ou quoi": True}
         for text, called in heard_live.items():
             self.assertEqual(bool(router.wake.search(text)), called, text)
+        router = Router({"wake_words": ["toptop", "top-top", "top top"]}, FakeLLM(), self.bot, [])
+        heard = {"Top, top.": True, "Top top, t'es là ?": True, "Toptop, réponds": True, "Allô, top-top": True,
+                 "C'est top, top du top": False, "Elle est top. Top.": False}
+        for text, called in heard.items():
+            self.assertEqual(bool(router.wake.search(text)), called, text)
 
     def test_not_spoken_to_it_only_speaks_up_to_give_points(self):
         wrong = dict(PROPOSE, confirm_text="Un point pour Alice, je valide ?")  # says Alice, would give it to Bob

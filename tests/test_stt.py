@@ -5,7 +5,7 @@ import threading
 import unittest
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
-from tsbot.stt import Transcriber, fix_names
+from tsbot.stt import Transcriber, fix_names, no_loops
 
 
 class FakeGemini(BaseHTTPRequestHandler):
@@ -53,6 +53,13 @@ class NamesTest(unittest.TestCase):
         # The bot's name misheard is found again, a common phrase that sounds close is left alone (heard live).
         self.assertEqual(fix_names("Botob, réponds", ["botop", "bottop"]), "bottop, réponds")
         self.assertEqual(fix_names("Elle est au top.", ["botop", "bottop"]), "Elle est au top.")
+
+    def test_loops_are_cut(self):
+        # Heard live: a model stuck repeating a word, a letter or a sign.
+        self.assertEqual(no_loops("Ouais, " * 200 + "o, o, o, o, o."), "Ouais, Ouais, Ouais, o, o, o, o.")
+        self.assertEqual(no_loops("O" + "o" * 300), "Ooo")
+        self.assertEqual(no_loops("Le choix entre...!!!!!!!!!!!!"), "Le choix entre...!!!")
+        self.assertEqual(no_loops("Il a 10000 points, non non non."), "Il a 10000 points, non non non.")
 
 
 class GeminiTest(unittest.TestCase):

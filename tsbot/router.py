@@ -72,9 +72,11 @@ class Router:
         one = [w for w in self.wake_words if " " not in w.strip()]
         two = [w for w in self.wake_words if " " in w.strip()]
         # A two-word name is often a common phrase too ("c'est beau top" heard for "c'est au top"): it only counts
-        # at the start of a sentence, after one word at most ("Allô, beau top ?").
+        # at the start of a sentence, after one word at most ("Allô, beau top ?"). Its words may be split by a
+        # comma or a full stop ("Top, top." heard live for "top top").
         parts = ([r"\b(?:" + "|".join(map(re.escape, one)) + r")\b"] if one else []) + (
-            [r"(?:^|[.!?]\s+)(?:\w+,?\s+)?(?:" + "|".join(map(re.escape, two)) + r")\b"] if two else [])
+            [r"(?:^|[.!?]\s+)(?:\w+,?\s+)?(?:" + "|".join(r"\W+".join(map(re.escape, w.split())) for w in two) + r")\b"]
+            if two else [])
         self.wake = re.compile("|".join(parts) or r"(?!)", re.I)
         self.actions: dict = {}
         self.pending: dict | None = None

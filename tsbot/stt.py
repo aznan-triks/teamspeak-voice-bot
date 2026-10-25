@@ -63,6 +63,13 @@ def fix_names(text: str, names) -> str:
     return "".join(out)
 
 
+def no_loops(text: str) -> str:
+    """A model stuck in a loop (seen live: "ouais, " 200 times, "Ooooo…", "!!!!!!"): three in a row are enough."""
+    text = re.sub(r"(\b[\w'-]+\W{1,3})\1{3,}", r"\1\1\1", text, flags=re.I)
+    text = re.sub(r"([^\W\d])\1{3,}", lambda m: m[0][:3], text, flags=re.I)  # letters only: "10000" stays
+    return re.sub(r"([^\w\s])\1{3,}", r"\1\1\1", text)
+
+
 class Transcriber:
     def __init__(self, cfg: dict, api_key: str = ""):
         self.cfg = cfg
@@ -104,7 +111,7 @@ class Transcriber:
         return self._local
 
     def __call__(self, pcm: bytes) -> str:
-        text = fix_names(self.transcribe(pcm), self.names())
+        text = fix_names(no_loops(self.transcribe(pcm)), self.names())
         if not self.laughing(pcm):
             return text
         laugh = self.cfg.get("laugh_text", "(rires)")
