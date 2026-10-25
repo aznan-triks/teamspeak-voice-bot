@@ -10,7 +10,8 @@ import urllib.request
 def parse_reply(content: str) -> dict:
     """The model's answer → a JSON object. Tolerates reasoning tags and text around the JSON."""
     content = re.sub(r"<think>.*?</think>", "", content, flags=re.S)
-    reply = json.loads(content[content.find("{"): content.rfind("}") + 1])  # ValueError when there is no JSON
+    # The first object only: DeepSeek sometimes writes two in a row. ValueError when there is no JSON.
+    reply = json.JSONDecoder().raw_decode(content[content.find("{"):])[0]
     if not isinstance(reply, dict):
         raise ValueError("the reply is not a JSON object")
     return reply

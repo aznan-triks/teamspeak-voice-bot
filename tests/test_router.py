@@ -196,6 +196,25 @@ class RouterTest(unittest.TestCase):
         self.hear(ALICE, "Merci.", now=5)  # often a noise misheard: no LLM call
         self.assertEqual(llm.calls, 1)
 
+    def test_two_word_name_only_counts_at_the_start(self):
+        self.setup(FakeLLM())
+        router = Router({"wake_words": ["botop", "beau top"]}, FakeLLM(), self.bot, [])
+        heard_live = {"Allô, beau top? C'est à toi que je parle?": True, "Eh bottop, réponds": False, "Beau top, t'es là": True,
+                      "La même, j'ai cristé Safir au début. C'est beau top.": False, "Elle est beau top.": False,
+                      "C'est un PD botop ou quoi": True}
+        for text, called in heard_live.items():
+            self.assertEqual(bool(router.wake.search(text)), called, text)
+
+    def test_not_spoken_to_it_only_speaks_up_to_give_points(self):
+        wrong = dict(PROPOSE, confirm_text="Un point pour Alice, je valide ?")  # says Alice, would give it to Bob
+        llm = FakeLLM({"type": "answer", "text": "Bravo !"}, wrong, PROPOSE)
+        self.setup(llm)
+        self.router.cfg["watch_for_actions"] = True
+        self.hear(ALICE, "j'ai gagné la partie haha")
+        self.hear(ALICE, "Alice a gagné", now=2)
+        self.hear(ALICE, "Bob a gagné aux fléchettes", now=3)
+        self.assertEqual((llm.calls, self.voice.said), (3, ["Un point pour Bob, je valide ?"]))
+
     def test_personality_is_added_to_the_prompt(self):
         self.setup(FakeLLM())
         router = Router({"wake_words": ["jarvis"], "personality": "Tu es drôle."}, FakeLLM(), self.bot, [])
@@ -258,6 +277,7 @@ class HelpersTest(unittest.TestCase):
 
     def test_parse_reply(self):
         self.assertEqual(parse_reply('<think>hmm</think>```json\n{"type":"ignore"}\n```'), {"type": "ignore"})
+        self.assertEqual(parse_reply('{"type":"ignore"}\n\n{"type":"answer","text":"x"}'), {"type": "ignore"})  # DeepSeek, live
         with self.assertRaises(ValueError):
             parse_reply("pas de JSON ici")
 

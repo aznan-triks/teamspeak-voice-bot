@@ -66,7 +66,9 @@ wake_words = ["hector"]   # say it to talk to the bot ("Hector, ..."): tested to
 confirm_timeout_s = 20    # time to say "oui" or "non" after the bot asks
 max_failures = 3          # failures in a row before degraded mode
 warm_up = true            # read the prompt once at start: the first question is answered much faster
-follow_up_s = 30          # after the bot answers, people can go on talking to it this long without its name
+follow_up_s = 0           # after the bot answers, people can go on talking to it this long without its name
+watch_for_actions = false # without its name, the bot may still speak up to propose an action ("Bob won": a point?).
+                          # Every sentence then goes to the LLM: use a fast one (DeepSeek: ~1 s, a few cents a night)
 follow_up_min_words = 3   # shorter lines ("Merci.", "Ah.") need the bot's name
 # The bot's character, in the language it speaks (French here). It sets the tone, never the rules.
 personality = """Tu es le pote un peu chambreur du groupe : drôle, direct, jamais méchant. Tu tutoies tout le monde,

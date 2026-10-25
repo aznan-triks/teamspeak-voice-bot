@@ -67,7 +67,13 @@ class Router:
         self.conversing_until = 0.0  # after the bot answered, people can go on talking to it without its name
         self.partner, self.replied_ms = None, 0  # who the bot last answered, and when it started saying it (Unix ms)
         self.wake_words = cfg.get("wake_words", ["hector"])
-        self.wake = re.compile(r"\b(" + "|".join(map(re.escape, self.wake_words)) + r")\b", re.I)
+        one = [w for w in self.wake_words if " " not in w.strip()]
+        two = [w for w in self.wake_words if " " in w.strip()]
+        # A two-word name is often a common phrase too ("c'est beau top" heard for "c'est au top"): it only counts
+        # at the start of a sentence, after one word at most ("Allô, beau top ?").
+        parts = ([r"\b(?:" + "|".join(map(re.escape, one)) + r")\b"] if one else []) + (
+            [r"(?:^|[.!?]\s+)(?:\w+,?\s+)?(?:" + "|".join(map(re.escape, two)) + r")\b"] if two else [])
+        self.wake = re.compile("|".join(parts) or r"(?!)", re.I)
         self.actions: dict = {}
         self.pending: dict | None = None
         self.failures, self.degraded, self.next_probe = 0, False, 0.0
@@ -107,13 +113,16 @@ class Router:
         # A lone "Merci." or "Ah." (often noise misheard) does not go on the conversation.
         self.following = (now < self.conversing_until and t.speaker.uid == self.partner
                           and len(t.text.split()) >= self.cfg.get("follow_up_min_words", 3))
-        if not (addressed or same or self.following):
+        spoken_to = addressed or same or self.following
+        if not (spoken_to or (self.cfg.get("watch_for_actions") and self.actions)):
             return
         asked = time.monotonic()
         reply = self._ask(now)
         if reply is None:
             return
         kind = reply.get("type")
+        if not spoken_to and kind != "propose":
+            return  # nobody talks to it: it only speaks up to propose an action (points...)
         if kind in ("answer", "clarify", "explain") and isinstance(reply.get("text"), str):
             text = no_relaunch(reply["text"]) if kind == "answer" else reply["text"]
             me = f"[{self.bot.me.nickname}] " if self.bot.me else "[bot] "
@@ -126,7 +135,7 @@ class Router:
             self.conversing_until = now + time.monotonic() - asked + seconds + self.cfg.get("follow_up_s", 30)
             self.partner = t.speaker.uid
         elif kind == "propose":
-            self._propose(reply, t, now, asked)
+            self._propose(reply, t, now, asked, spoken_to)
         elif kind == "confirm" and same:
             self._finish(reply.get("decision") == "oui")
 
@@ -174,15 +183,21 @@ class Router:
         """Saved for the statistics page: how long the LLM took."""
         self.bot.archive.add_llm_call(int(started * 1000), int((time.time() - started) * 1000), ok)
 
-    def _propose(self, reply: dict, t, now: float, asked: float) -> None:
+    def _propose(self, reply: dict, t, now: float, asked: float, spoken_to: bool = True) -> None:
         entry = self.actions.get(reply.get("action"))
         confirm = reply.get("confirm_text")
-        if entry is None or not valid(reply.get("args"), entry[1].params) or not isinstance(confirm, str) or not confirm.strip():
+        args = reply.get("args")
+        # People say yes to what they hear: every name in the action must be in the question (seen live:
+        # "Ilker ... ?" read out for a point to someone else).
+        if (entry is None or not valid(args, entry[1].params) or not isinstance(confirm, str) or not confirm.strip()
+                or any(isinstance(v, str) and v.lower() not in confirm.lower() for v in args.values())):
             log.warning("invalid proposal ignored: %s", reply)
-            self.bot.say("invalid")
+            if spoken_to:
+                self.bot.say("invalid")
             return
         if t.speaker.identity is None:  # an unknown person can never trigger an action
-            self.bot.say("unknown_speaker")
+            if spoken_to:
+                self.bot.say("unknown_speaker")
             return
         if self.pending:
             self._close("replaced")
