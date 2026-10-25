@@ -164,26 +164,30 @@ function getStatusLabel(status) {
 const PAGES = {
   conversation: { key: "page.conversation", render: pageConversation },
   phrases: { key: "page.phrases", render: pagePhrases },
-  services: { key: "page.services", render: pageServices, admin: true },
-  actions: { key: "page.actions", render: pageActions },
-  live: { key: "page.live", render: pageLive, admin: true },
   speak: { key: "page.speak", render: pageSpeak, admin: true },
+  stats: { key: "page.stats", render: pageStats },
+  actions: { key: "page.actions", render: pageActions },
+  profile: { key: "page.profile", render: pageProfile },
+  live: { key: "page.live", render: pageLive, admin: true },
+  services: { key: "page.services", render: pageServices, admin: true },
   settings: { key: "page.settings", render: pageSettings, admin: true },
   people: { key: "page.people", render: pagePeople, admin: true },
   plugins: { key: "page.plugins", render: pagePlugins, admin: true },
-  stats: { key: "page.stats", render: pageStats, admin: true },
   logs: { key: "page.logs", render: pageLogs, admin: true },
 };
 
 function drawRail() {
   const link = (id) => `<a href="#/${id}" data-page="${id}">${esc(t(PAGES[id].key))}</a>`;
+  const playerPages = ["conversation", "phrases", "stats", "actions", "profile"];
+  const adminPages = ["live", "speak", "services", "settings", "people", "plugins", "logs"];
   $("#rail").innerHTML = `
     <div class="brand">${avatar(BOT)}<div><strong>${esc(BOT)}</strong><small>${esc(t("meta.title"))}</small></div></div>
-    ${me.admin ? `<div class="group">${esc(t("nav.group.bot"))}</div>${["live", "services", "speak", "logs", "stats"].map(link).join("")}
-      <div class="group">${esc(t("nav.group.config"))}</div>${["settings", "people", "plugins"].map(link).join("")}
-      <div class="group">${esc(t("nav.group.all"))}</div>` : ""}
-    ${["conversation", "phrases", "actions"].map(link).join("")}
-    <div class="who">${avatar(me.identity || me.nickname)}<div><strong>${esc(me.identity || me.nickname)}</strong>${me.admin ? esc(t("nav.admin")) : esc(t("nav.member"))}<br><a href="#" id="logout">${esc(t("nav.logout"))}</a></div></div>`;
+    <div class="group">${esc(t("nav.group.player"))}</div>
+    ${playerPages.map(link).join("")}
+    ${me.admin ? `
+      <div class="group">${esc(t("nav.group.admin"))}</div>
+      ${adminPages.map(link).join("")}` : ""}
+    <div class="who">${avatar(me.identity || me.nickname)}<div><strong>${esc(me.identity || me.nickname)}</strong>${me.admin ? esc(t("nav.admin")) : esc(t("nav.member"))}<br><a href="#/profile">${esc(t("nav.profile"))}</a> · <a href="#" id="logout">${esc(t("nav.logout"))}</a></div></div>`;
   $("#logout").onclick = async (e) => {
     e.preventDefault();
     await api("/api/logout", {});
@@ -199,7 +203,17 @@ function setLamp(state, text) {
 }
 
 async function refreshLamp() {
-  if (!me?.admin) return setLamp("listening", BOT);
+  if (!me?.admin) {
+    try {
+      const p = await api("/api/presence");
+      if (!p.bot_online) setLamp("down", t("lamp.down"));
+      else if (p.talking) setLamp("live", t("lamp.live_talking"));
+      else setLamp("listening", t("lamp.listening"));
+    } catch (e) {
+      setLamp("down", e.status === 503 ? t("lamp.not_responding") : t("lamp.down"));
+    }
+    return;
+  }
   try {
     const s = await api("/api/state");
     const talking = (s.speaking || []).some((x) => Date.now() - x.ms < 3000);
@@ -368,6 +382,20 @@ async function pagePhrases() {
   await load(true);
 }
 
+function formatActionRequest(a) {
+  const isPoints = a.name === "scores.add" || a.name.endsWith(".add_points");
+  const label = isPoints ? t("actions.add_points") : a.name;
+  let details = "";
+  if (isPoints && a.args) {
+    const p = a.args.player || "?";
+    const pts = a.args.points != null ? a.args.points : 1;
+    details = `<span class="chip">${esc(p)} : ${pts > 0 ? "+" : ""}${pts} pt${Math.abs(pts) > 1 ? "s" : ""}</span>`;
+  } else {
+    details = esc(Object.entries(a.args || {}).map(([k, v]) => `${k} : ${v}`).join(", "));
+  }
+  return `<strong>${esc(label)}</strong> ${details}${a.sentence ? `<div class="quote">« ${esc(a.sentence)} »</div>` : ""}`;
+}
+
 async function pageActions() {
   const ledeExtra = me.admin ? "" : t("actions.lede_member");
   main.innerHTML = `
@@ -396,9 +424,7 @@ async function pageActions() {
               <td><time datetime="${new Date(a.created_ms).toISOString()}">${when(a.created_ms)}</time></td>
               <td><strong>${esc(a.identity || "?")}</strong></td>
               <td>
-                <strong>${esc(a.name.endsWith(".add_points") ? t("actions.add_points") : a.name)}</strong>
-                ${esc(Object.entries(a.args).map(([k, v]) => `${k} : ${v}`).join(", "))}
-                ${a.sentence ? `<div class="quote">« ${esc(a.sentence)} »</div>` : ""}
+                ${formatActionRequest(a)}
               </td>
               <td>
                 <span class="chip ${esc(a.status)}">${esc(getStatusLabel(a.status))}</span>
@@ -419,7 +445,7 @@ function conversationFeed(list, statusEl) {
     statusEl.className = "hearing " + (pres.hearing ? "on" : "off");
     statusEl.innerHTML = pres.hearing
       ? esc(t("presence.hearing"))
-      : esc(t("presence.not_hearing", { reason: pres.reason }));
+      : `<span>${esc(t("presence.not_hearing", { reason: pres.reason }))}</span><div class="help-tip" style="margin-top:6px;font-size:13px;opacity:0.9">💡 ${esc(t("conversation.help_presence_tip", { bot: BOT }))}</div>`;
     if (first && !rows.length) {
       list.innerHTML = `<div class="empty-state"><p>${esc(t("conversation.empty", { bot: BOT }))}</p></div>`;
     }
@@ -442,6 +468,19 @@ async function pageConversation() {
   main.innerHTML = `
     <h1>${esc(t("conversation.title"))}</h1>
     <p class="lede">${esc(t("conversation.lede", { bot: BOT }))}</p>
+    <div class="panel guide-card" style="margin-bottom:var(--space-4)">
+      <div class="split" style="grid-template-columns:1fr auto;gap:var(--space-3);align-items:center">
+        <div>
+          <h2 style="margin:0 0 4px">${esc(t("conversation.guide_title", { bot: BOT }))}</h2>
+          <p class="muted" style="margin:0;font-size:13.5px;line-height:1.4">${esc(t("conversation.guide_text", { bot: BOT }))}</p>
+        </div>
+        <div class="row" style="gap:8px">
+          ${me.admin ? `<a href="#/speak" class="btn primary">${esc(t("conversation.btn_speak"))}</a>` : ""}
+          <a href="#/stats" class="btn">${esc(t("conversation.btn_stats"))}</a>
+          <a href="#/profile" class="btn ghost">${esc(t("conversation.btn_profile"))}</a>
+        </div>
+      </div>
+    </div>
     <p id="hearing" class="hearing"></p>
     <section class="panel" aria-label="${esc(t("conversation.title"))}">
       <div id="lines" class="subtitles" role="log" aria-live="polite"></div>
@@ -449,6 +488,69 @@ async function pageConversation() {
   const draw = conversationFeed($("#lines"), $("#hearing"));
   await draw();
   timer = setInterval(draw, 2000);
+}
+
+async function pageProfile() {
+  main.innerHTML = `
+    <h1>${esc(t("profile.title"))}</h1>
+    <p class="lede">${esc(t("profile.lede", { bot: BOT }))}</p>
+    <div class="panel stack"><div class="loading-state"><span class="spinner" aria-hidden="true"></span></div></div>`;
+
+  const prof = await api("/api/my/profile").catch(() => ({ uid: me.uid, identity: me.identity || "", opt_out: false }));
+
+  main.innerHTML = `
+    <h1>${esc(t("profile.title"))}</h1>
+    <p class="lede">${esc(t("profile.lede", { bot: BOT }))}</p>
+    <form id="profile-form" class="stack">
+      <fieldset class="panel stack">
+        <legend>${esc(t("profile.sec_identity"))}</legend>
+        <div class="field">
+          <label for="prof-id">${esc(t("profile.identity_label"))}</label>
+          <input id="prof-id" type="text" value="${esc(prof.identity || "")}" readonly aria-describedby="prof-id-help">
+          <p id="prof-id-help" class="help">${esc(t("profile.identity_help"))}</p>
+        </div>
+        <div class="field">
+          <label for="prof-nick">${esc(t("profile.ts_nickname_label"))}</label>
+          <input id="prof-nick" type="text" value="${esc(me.nickname || "")}" readonly disabled style="opacity:0.8">
+        </div>
+        <div class="field">
+          <label for="prof-uid">${esc(t("profile.uid_label"))}</label>
+          <input id="prof-uid" type="text" value="${esc(prof.uid || me.uid)}" readonly disabled style="font-family:var(--mono);font-size:12px;opacity:0.8" aria-describedby="prof-uid-help">
+          <p id="prof-uid-help" class="help">${esc(t("profile.uid_help"))}</p>
+        </div>
+      </fieldset>
+
+      <fieldset class="panel stack">
+        <legend>${esc(t("profile.sec_privacy"))}</legend>
+        <div class="field">
+          <label class="switch">
+            <input type="checkbox" id="prof-optout" ${prof.opt_out ? "checked" : ""}>
+            <span>${esc(t("profile.opt_out_label"))}</span>
+          </label>
+          <p class="help">${esc(t("profile.opt_out_help"))}</p>
+        </div>
+      </fieldset>
+
+      <div class="row-end">
+        <button type="submit" class="btn primary" id="save-profile">${esc(t("profile.btn_save"))}</button>
+      </div>
+    </form>`;
+
+  $("#profile-form").onsubmit = async (e) => {
+    e.preventDefault();
+    const btn = $("#save-profile");
+    btn.disabled = true;
+    try {
+      const saved = await api("/api/my/profile", { opt_out: $("#prof-optout").checked });
+      me.opt_out = saved.opt_out;
+      drawRail();
+      toast(t("profile.saved_toast"));
+    } catch (err) {
+      toast(err.message, true);
+    } finally {
+      btn.disabled = false;
+    }
+  };
 }
 
 // ---- Admin Pages ----
@@ -1080,6 +1182,6 @@ document.addEventListener("keydown", (e) => {
   window.addEventListener("hashchange", show);
   await show();
   refreshBanner();
-  if (me.admin) setInterval(refreshLamp, 5000);
-  else refreshLamp();
+  setInterval(refreshLamp, 3000);
+  refreshLamp();
 })();

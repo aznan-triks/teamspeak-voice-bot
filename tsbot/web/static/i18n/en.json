@@ -1,6 +1,6 @@
 {
   "lang.name": "English",
-  "meta.title": "Bot Management",
+  "meta.title": "Voice Companion",
   "nav.skip": "Skip to content",
   "nav.menu": "Menu",
   "nav.open_menu": "Open menu",
@@ -10,22 +10,23 @@
   "nav.admin": "Administrator",
   "nav.member": "Member",
   "nav.logout": "Log out",
+  "nav.group.player": "Player Space",
+  "nav.group.admin": "Administration",
   "nav.group.bot": "The Bot",
   "nav.group.config": "Configuration",
   "nav.group.all": "For Everyone",
-
   "page.conversation": "Conversation",
   "page.phrases": "My Phrases",
   "page.services": "Services",
   "page.actions": "Actions",
   "page.live": "Live Status",
   "page.speak": "Make Bot Speak",
+  "page.profile": "My Identity & Mic",
   "page.settings": "Settings",
-  "page.people": "Identities",
+  "page.people": "All Identities",
   "page.plugins": "Plugins",
   "page.stats": "Statistics",
   "page.logs": "Logs",
-
   "lamp.connecting": "Connecting…",
   "lamp.listening": "Listening",
   "lamp.live_talking": "Someone is speaking",
@@ -33,15 +34,12 @@
   "lamp.degraded": "Degraded mode: listening but no longer acting",
   "lamp.down": "Offline",
   "lamp.not_responding": "Bot not responding",
-
   "banner.pending_restart": "Settings are waiting to be applied. Applying restarts the bot: it leaves the channel and returns in about one minute.",
   "banner.apply_now": "Apply now",
   "banner.restart_confirm": "Restart the bot to apply settings? It will leave the channel for about one minute.",
   "banner.restarting": "Restart requested. The bot will return in about one minute.",
-
   "dialog.confirm": "Confirm",
   "dialog.cancel": "Cancel",
-
   "login.title": "Log In",
   "login.lede": "Connect to the TeamSpeak server, choose your nickname: {bot} will send you a code. It appears as a popup in TeamSpeak (a poke) and in your private messages.",
   "login.searching": "Looking for connected users…",
@@ -55,7 +53,6 @@
   "login.btn_resend": "Resend code",
   "login.btn_change": "Change nickname",
   "login.retry_auto": "Automatic retry in a few seconds.",
-
   "phrases.title": "My Phrases",
   "phrases.lede": "What the bot transcribed from your voice, newest to oldest.",
   "phrases.search_placeholder": "Search a word…",
@@ -64,7 +61,6 @@
   "phrases.empty_query": "No phrases containing this word.",
   "phrases.more": "Load older",
   "phrases.duration": "duration {duration}",
-
   "actions.title": "Actions",
   "actions.lede": "Every voice request: who asked, what was proposed, and the outcome.",
   "actions.lede_member": " The original sentence is only visible for your own requests.",
@@ -74,18 +70,34 @@
   "actions.th_request": "Request",
   "actions.th_result": "Result",
   "actions.add_points": "Add points",
-
   "status.proposed": "pending",
   "status.replaced": "replaced",
   "status.cancelled": "cancelled",
   "status.expired": "expired",
   "status.failed": "failed",
   "status.done": "completed",
-
   "conversation.title": "Conversation",
   "conversation.lede": "What {bot} heard in its channel while you were present with headset unmuted. What you couldn't hear never appears.",
   "conversation.empty": "Nothing yet. Join {bot}'s channel with your headset active, and the conversation will appear here.",
-
+  "conversation.guide_title": "Welcome to {bot}'s voice channel",
+  "conversation.guide_text": "To talk to it, say \"{bot}, …\" into your mic. Here you can read back what was said while you were there, see the channel's stats, and opt out of transcription.",
+  "conversation.btn_speak": "Make bot speak",
+  "conversation.btn_stats": "View stats",
+  "conversation.btn_profile": "My identity & mic",
+  "conversation.help_presence_tip": "Join the TeamSpeak channel where {bot} is located with your headset unmuted to follow the conversation live.",
+  "profile.title": "My Identity & Privacy",
+  "profile.lede": "Your player name for {bot} and the transcription of your voice.",
+  "profile.sec_identity": "Player Identity",
+  "profile.identity_label": "Player Name",
+  "profile.identity_help": "The name the bot knows you by and counts your points under. Only an admin can change it: ask one.",
+  "profile.ts_nickname_label": "Current TeamSpeak Nickname",
+  "profile.uid_label": "Permanent TeamSpeak Identifier (UID)",
+  "profile.uid_help": "Your unique identifier on this TeamSpeak server.",
+  "profile.sec_privacy": "Privacy & Microphone",
+  "profile.opt_out_label": "Do not transcribe my voice (Opt-out)",
+  "profile.opt_out_help": "If enabled, the bot completely ignores your voice in TeamSpeak: nothing is transcribed or saved.",
+  "profile.btn_save": "Save my preferences",
+  "profile.saved_toast": "Preferences saved successfully.",
   "services.title": "Services",
   "services.lede": "The three background programs running {bot} on the machine. They restart automatically when the host boots.",
   "services.empty": "No services declared ([web] services in configuration).",
@@ -109,7 +121,6 @@
   "services.web_restart_warn": " The site will reload in a few seconds.",
   "services.tsbot_restart_warn": " The bot leaves the channel for about one minute.",
   "services.action_requested": "{action}: requested.",
-
   "live.title": "Live Status",
   "live.lede": "Current bot status, channel presence, and active speaker. Conversation only appears if you can hear it.",
   "live.fact_teamspeak": "TeamSpeak",
@@ -128,7 +139,6 @@
   "live.channel_empty": "No one else in the channel.",
   "live.unknown_id": "unknown",
   "live.bot_unresponsive": "unresponsive",
-
   "speak.title": "Make Bot Speak",
   "speak.lede": "Preview the sentence here first, then say it in the channel. Sentences are synthesized once, then cached.",
   "speak.label_phrase": "Sentence",
@@ -138,7 +148,6 @@
   "speak.toast_empty": "Please enter a sentence first.",
   "speak.toast_voice_error": "Voice could not be synthesized.",
   "speak.toast_spoken": "Spoken in channel ({duration}).",
-
   "settings.title": "Settings",
   "settings.lede": "Changes are saved immediately and applied when you restart the bot via 'Apply'.",
   "settings.sec.teamspeak": "TeamSpeak",
@@ -153,7 +162,6 @@
   "settings.saved_toast": "Saved. Click 'Apply' for the bot to load them.",
   "settings.changed_indicator": " (modified)",
   "settings.none_placeholder": "None",
-
   "people.title": "Identities & Exclusions",
   "people.lede": "Link a TeamSpeak client or server group to a player name. Only recognized players can trigger voice actions. Check 'Administrator' to grant access to all site pages.",
   "people.sec_identities": "Identities",
@@ -178,7 +186,6 @@
   "people.toast_self_remove": "You cannot remove your own row: you would lose access to these pages.",
   "people.toast_validation": "Assign a player name to each row, check 'Administrator', or remove it.",
   "people.cannot_remove_own_admin": "You cannot remove your own admin rights.",
-
   "plugins.title": "Plugins",
   "plugins.lede": "Plugins provide actions and knowledge (scores, rankings…) to the bot. Enable them, configure settings, then test connection.",
   "plugins.btn_test": "Test",
@@ -191,7 +198,6 @@
   "plugins.label.scoreboard": "Scoreboard (example)",
   "plugins.setting_name_label": "Setting name",
   "plugins.setting_value_label": "Value",
-
   "stats.title": "Statistics",
   "stats.lede": "Bot processing speed and channel activity metrics.",
   "stats.label_period": "Timeframe",
@@ -211,7 +217,6 @@
   "stats.empty_daily": "No phrases recorded during this timeframe.",
   "stats.empty_actions": "No actions recorded during this timeframe.",
   "stats.minutes_short": "{min} min",
-
   "logs.title": "Logs",
   "logs.lede": "Bot activity logs: connections, transcribed phrases, replies, and errors. Displays up to the last 500 lines since startup.",
   "logs.switch_errors_only": "Errors and warnings only",
@@ -220,24 +225,20 @@
   "logs.restart_requested": "Restart requested.",
   "logs.empty": "No logs recorded yet.",
   "logs.aria_label": "Bot activity log",
-
   "time.just_now": "just now",
   "time.mins_ago": "{n}m ago",
   "time.hours_ago": "{n}h ago",
   "time.days_ago": "{n}d ago",
-
   "reasons.no_changes": "No changes to save.",
   "reasons.phrase_required": "Please enter a sentence first.",
   "reasons.own_rights": "You cannot remove your own admin rights.",
   "reasons.site_self_stop": "The site cannot stop itself.",
-
   "presence.bot_offline": "The bot is not connected right now.",
   "presence.user_offline": "You are not connected to the TeamSpeak server.",
   "presence.wrong_channel": "You are not in {name}'s channel.",
   "presence.deaf": "Your headset is muted: you cannot hear the channel.",
   "presence.hearing": "You can hear the channel: conversation is displayed here.",
   "presence.not_hearing": "{reason} You only see what you could hear: nothing new will appear until you listen to the channel.",
-
   "error.login_required": "Please log in first.",
   "error.admin_only": "Admins only.",
   "error.page_not_found": "Page not found.",
@@ -258,7 +259,6 @@
   "error.action_unknown": "Unknown action.",
   "error.cannot_stop_self": "The site cannot stop itself: you would not be able to start it again. Use 'Restart'.",
   "error.internal": "Internal error: {error}",
-
   "field.teamspeak.address.label": "TeamSpeak Server Address",
   "field.teamspeak.address.help": "IP address or hostname, including ':port' if not default 9987.",
   "field.teamspeak.server_password.label": "Server Password",

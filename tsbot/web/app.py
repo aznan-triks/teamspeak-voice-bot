@@ -196,6 +196,12 @@ class App:
             return None
         # Checked again on every request: someone removed from the admins loses access right away.
         data["admin"] = self.is_admin(data.get("uid"), data.get("groups", []))
+        cfg = self.current_config()
+        if data.get("uid"):
+            cfg_id = cfg.get("identities", {}).get(f"uid:{data['uid']}")
+            if cfg_id is not None:
+                data["identity"] = cfg_id
+            data["opt_out"] = data["uid"] in cfg.get("privacy", {}).get("opt_out_uids", [])
         return data
 
     def is_admin(self, uid: str | None, groups) -> bool:
@@ -262,10 +268,12 @@ class App:
         del self.codes[client_id]
         c = pending["client"]
         log.info("%s logged in", c.get("nickname"))
+        cfg = self.current_config()
         user = {
             "uid": c["uid"],
             "nickname": c.get("nickname"),
-            "identity": c.get("identity"),
+            "identity": cfg.get("identities", {}).get(f"uid:{c['uid']}", c.get("identity")),
+            "opt_out": c["uid"] in cfg.get("privacy", {}).get("opt_out_uids", []),
             "groups": c.get("server_groups") or [],
             "admin": self.is_admin(c["uid"], c.get("server_groups") or []),
             "exp": time.time() + self.web.get("session_days", 30) * 86400,
@@ -313,16 +321,48 @@ class App:
         try:
             state = self.bot("GET", "/state")
         except HttpError:
-            return {"hearing": False, "reason": tr("presence.bot_offline", lang)}
+            return {"hearing": False, "reason": tr("presence.bot_offline", lang), "bot_online": False, "talking": False}
         bot_channel = (state.get("me") or {}).get("channel_id")
         me = next((c for c in state["clients"] if c.get("uid") == uid), None)
+        talking = any(time.time() * 1000 - x.get("ms", 0) < 3000 for x in state.get("speaking", []))
         if me is None:
-            return {"hearing": False, "reason": tr("presence.user_offline", lang)}
+            return {"hearing": False, "reason": tr("presence.user_offline", lang), "bot_online": True, "talking": talking}
         if me.get("channel_id") != bot_channel:
-            return {"hearing": False, "reason": tr("presence.wrong_channel", lang, name=self.bot_name())}
+            return {"hearing": False, "reason": tr("presence.wrong_channel", lang, name=self.bot_name()), "bot_online": True, "talking": talking}
         if not me.get("hearing"):
-            return {"hearing": False, "reason": tr("presence.deaf", lang)}
-        return {"hearing": True, "reason": ""}
+            return {"hearing": False, "reason": tr("presence.deaf", lang), "bot_online": True, "talking": talking}
+        return {"hearing": True, "reason": "", "bot_online": True, "talking": talking}
+
+    def my_profile(self, uid: str) -> dict:
+        cfg = self.current_config()
+        identity = cfg.get("identities", {}).get(f"uid:{uid}")
+        if not identity:
+            try:
+                state = self.bot("GET", "/state")
+                client = next((c for c in state.get("clients", []) if c.get("uid") == uid), None)
+                identity = (client or {}).get("identity") or (client or {}).get("nickname") or ""
+            except Exception:
+                identity = ""
+        opt_out = uid in cfg.get("privacy", {}).get("opt_out_uids", [])
+        return {"uid": uid, "identity": identity, "opt_out": opt_out}
+
+    def save_my_profile(self, uid: str, opt_out: bool | None = None, lang: str = "fr") -> dict:
+        """A member may only stop being transcribed. Who they are stays set by admins: a self-chosen name could
+        claim another player and get points added in their name."""
+        overlay = self.overlay()
+        if opt_out is not None:
+            privacy = overlay.setdefault("privacy", {})
+            excluded = set(privacy.get("opt_out_uids", []))
+            if opt_out:
+                excluded.add(uid)
+            else:
+                excluded.discard(uid)
+            privacy["opt_out_uids"] = sorted(excluded)
+        tmp = self.settings_file.with_suffix(".tmp")
+        tmp.write_text(json.dumps(overlay, ensure_ascii=False, indent=2), encoding="utf-8")
+        tmp.chmod(0o600)
+        tmp.replace(self.settings_file)
+        return self.my_profile(uid)
 
     def actions(self, uid: str, admin: bool, before_id: int = 0, limit: int = 50) -> list:
         before_id = max(0, before_id)

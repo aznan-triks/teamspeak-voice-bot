@@ -66,7 +66,17 @@ def route(
 
     # Every member.
     if method == "GET" and path == "/api/me":
+        cfg = app.current_config()
+        if user.get("uid"):
+            cfg_id = cfg.get("identities", {}).get(f"uid:{user['uid']}")
+            if cfg_id is not None:
+                user["identity"] = cfg_id
+            user["opt_out"] = user["uid"] in cfg.get("privacy", {}).get("opt_out_uids", [])
         return ok(user)
+    if method == "GET" and path == "/api/my/profile":
+        return ok(app.my_profile(user["uid"]))
+    if method == "POST" and path == "/api/my/profile":
+        return ok(app.save_my_profile(user["uid"], body.get("opt_out"), lang=lang))
     if method == "GET" and path == "/api/my/phrases":
         return ok(app.my_phrases(user["uid"], one("q"), int(one("before_id", "0")), int(one("limit", "50"))))
     if method == "GET" and path == "/api/conversation":
@@ -75,8 +85,19 @@ def route(
         return ok(app.presence(user["uid"], lang=lang))
     if method == "GET" and path == "/api/actions":
         return ok(app.actions(user["uid"], user["admin"], int(one("before_id", "0")), int(one("limit", "50"))))
+    if method == "GET" and path == "/api/stats":
+        return ok(app.stats(int(one("days", "30"))))
     if not user["admin"]:
         raise err(403, "error.admin_only")
+
+    # Admins only: making the bot say anything in the channel.
+    if method == "POST" and path == "/api/say":
+        by = user.get("identity") or user.get("nickname") or user["uid"]
+        return ok(app.bot("POST", "/say", {"text": str(body.get("text", "")), "by": by}, lang=lang))
+    if method == "GET" and path == "/api/voice":
+        from urllib.parse import quote
+
+        return 200, "audio/wav", app.bot("GET", f"/voice?text={quote(one('text'))}", raw=True, lang=lang), None
 
     # Admins only.
     if method == "GET" and path == "/api/state":
@@ -85,13 +106,6 @@ def route(
         return ok(app.bot("GET", f"/logs?after={int(one('after', '0'))}", lang=lang))
     if method == "POST" and path == "/api/restart":
         return ok(app.bot("POST", "/restart", lang=lang))
-    if method == "POST" and path == "/api/say":
-        by = user.get("identity") or user.get("nickname") or user["uid"]
-        return ok(app.bot("POST", "/say", {"text": str(body.get("text", "")), "by": by}, lang=lang))
-    if method == "GET" and path == "/api/voice":
-        from urllib.parse import quote
-
-        return 200, "audio/wav", app.bot("GET", f"/voice?text={quote(one('text'))}", raw=True, lang=lang), None
     if method == "GET" and path == "/api/settings":
         return ok(app.settings(lang=lang))
     if method == "POST" and path == "/api/settings":
@@ -104,8 +118,6 @@ def route(
         return ok(app.service_action(str(body.get("name", "")), str(body.get("action", "")), lang=lang))
     if method == "GET" and path == "/api/services/logs":
         return ok(app.service_logs(one("name"), int(one("lines", "200")), lang=lang))
-    if method == "GET" and path == "/api/stats":
-        return ok(app.stats(int(one("days", "30"))))
     raise err(404, "error.page_not_found")
 
 

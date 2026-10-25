@@ -1,6 +1,6 @@
 {
   "lang.name": "Français",
-  "meta.title": "Gestion du bot",
+  "meta.title": "Compagnon vocal",
   "nav.skip": "Aller au contenu",
   "nav.menu": "Menu",
   "nav.open_menu": "Ouvrir le menu",
@@ -10,22 +10,23 @@
   "nav.admin": "Administrateur",
   "nav.member": "Membre",
   "nav.logout": "Se déconnecter",
+  "nav.group.player": "Espace joueur",
+  "nav.group.admin": "Administration",
   "nav.group.bot": "Le bot",
   "nav.group.config": "Configuration",
   "nav.group.all": "Pour tous",
-
   "page.conversation": "Conversation",
   "page.phrases": "Mes phrases",
   "page.services": "Services",
   "page.actions": "Actions",
   "page.live": "En direct",
   "page.speak": "Faire parler",
+  "page.profile": "Mon identité & micro",
   "page.settings": "Réglages",
-  "page.people": "Identités",
+  "page.people": "Toutes les identités",
   "page.plugins": "Plugins",
   "page.stats": "Statistiques",
   "page.logs": "Journal",
-
   "lamp.connecting": "Connexion…",
   "lamp.listening": "À l'écoute",
   "lamp.live_talking": "Quelqu'un parle",
@@ -33,15 +34,12 @@
   "lamp.degraded": "Mode dégradé : il écoute mais n'agit plus",
   "lamp.down": "Hors ligne",
   "lamp.not_responding": "Le bot ne répond pas",
-
   "banner.pending_restart": "Des réglages attendent d'être appliqués. Appliquer redémarre le bot : il quitte le salon et revient en une minute environ.",
   "banner.apply_now": "Appliquer maintenant",
   "banner.restart_confirm": "Redémarrer le bot pour appliquer les réglages ? Il quitte le salon une minute environ.",
   "banner.restarting": "Redémarrage demandé. Le bot revient dans une minute environ.",
-
   "dialog.confirm": "Confirmer",
   "dialog.cancel": "Annuler",
-
   "login.title": "Connexion",
   "login.lede": "Sois connecté au serveur TeamSpeak, choisis ton pseudo : {bot} t'envoie un code. Il apparaît dans une fenêtre au milieu de TeamSpeak (un « poke ») et dans tes messages privés.",
   "login.searching": "Recherche des personnes connectées…",
@@ -55,7 +53,6 @@
   "login.btn_resend": "Renvoyer un code",
   "login.btn_change": "Changer de pseudo",
   "login.retry_auto": "Nouvel essai automatique dans quelques secondes.",
-
   "phrases.title": "Mes phrases",
   "phrases.lede": "Ce que le bot a transcrit de ta voix, du plus récent au plus ancien.",
   "phrases.search_placeholder": "Chercher un mot…",
@@ -64,7 +61,6 @@
   "phrases.empty_query": "Aucune phrase avec ce mot.",
   "phrases.more": "Plus ancien",
   "phrases.duration": "durée {duration}",
-
   "actions.title": "Actions",
   "actions.lede": "Chaque demande faite à la voix : qui l'a demandée, ce qui a été proposé, et ce qui s'est passé.",
   "actions.lede_member": " La phrase d'origine n'est visible que pour tes propres demandes.",
@@ -74,18 +70,34 @@
   "actions.th_request": "Demande",
   "actions.th_result": "Résultat",
   "actions.add_points": "Ajout de points",
-
   "status.proposed": "en attente",
   "status.replaced": "remplacée",
   "status.cancelled": "annulée",
   "status.expired": "sans réponse",
   "status.failed": "échouée",
   "status.done": "faite",
-
   "conversation.title": "Conversation",
   "conversation.lede": "Ce que {bot} a entendu dans son salon pendant que tu y étais, casque actif. Ce que tu ne pouvais pas entendre n'apparaît jamais.",
   "conversation.empty": "Rien pour l'instant. Rejoins le salon de {bot}, casque actif, et la conversation s'affichera ici.",
-
+  "conversation.guide_title": "Bienvenue sur le salon vocal de {bot}",
+  "conversation.guide_text": "Pour lui parler, dis « {bot}, … » au micro. Ici, tu relis ce qui s'est dit pendant que tu étais là, tu vois les stats du salon et tu peux refuser d'être transcrit.",
+  "conversation.btn_speak": "Faire parler le bot",
+  "conversation.btn_stats": "Voir les stats",
+  "conversation.btn_profile": "Mon identité & micro",
+  "conversation.help_presence_tip": "Rejoins le salon TeamSpeak où se trouve {bot} avec ton casque actif pour suivre la conversation en direct.",
+  "profile.title": "Mon identité & Vie privée",
+  "profile.lede": "Ton nom de joueur pour {bot} et la transcription de ta voix.",
+  "profile.sec_identity": "Identité de joueur",
+  "profile.identity_label": "Nom de joueur",
+  "profile.identity_help": "Le nom sous lequel le bot te reconnaît et compte tes points. Seul un admin peut le changer : demande-lui.",
+  "profile.ts_nickname_label": "Pseudo TeamSpeak actuel",
+  "profile.uid_label": "Identifiant TeamSpeak fixe (UID)",
+  "profile.uid_help": "Ton identifiant unique sur ce serveur TeamSpeak.",
+  "profile.sec_privacy": "Vie privée & Micro",
+  "profile.opt_out_label": "Ne pas transcrire ma voix (Opt-out)",
+  "profile.opt_out_help": "Si activé, le bot ignore totalement ta voix dans TeamSpeak : aucune parole n'est transcrite ni enregistrée.",
+  "profile.btn_save": "Enregistrer mes préférences",
+  "profile.saved_toast": "Préférences enregistrées avec succès.",
   "services.title": "Services",
   "services.lede": "Les trois programmes qui font tourner {bot} sur le NUC. Ils redémarrent tout seuls au démarrage de la machine.",
   "services.empty": "Aucun service déclaré ([web] services dans la configuration).",
@@ -109,7 +121,6 @@
   "services.web_restart_warn": " Le site se recharge dans quelques secondes.",
   "services.tsbot_restart_warn": " Le bot quitte le salon pendant environ une minute.",
   "services.action_requested": "{action} : demandé.",
-
   "live.title": "En direct",
   "live.lede": "L'état du bot, qui est dans son salon et qui parle. La conversation n'apparaît que si tu peux l'entendre toi-même.",
   "live.fact_teamspeak": "TeamSpeak",
@@ -128,7 +139,6 @@
   "live.channel_empty": "Personne d'autre dans le salon.",
   "live.unknown_id": "inconnu",
   "live.bot_unresponsive": "ne répond pas",
-
   "speak.title": "Faire parler le bot",
   "speak.lede": "Écoute d'abord la phrase ici, puis fais-la dire dans le salon. Chaque phrase n'est générée qu'une fois, puis réutilisée.",
   "speak.label_phrase": "Phrase",
@@ -138,7 +148,6 @@
   "speak.toast_empty": "Écris d'abord une phrase.",
   "speak.toast_voice_error": "La voix n'a pas pu être générée.",
   "speak.toast_spoken": "Dit dans le salon ({duration}).",
-
   "settings.title": "Réglages",
   "settings.lede": "Les changements sont enregistrés tout de suite, puis appliqués quand tu redémarres le bot avec « Appliquer ».",
   "settings.sec.teamspeak": "TeamSpeak",
@@ -153,7 +162,6 @@
   "settings.saved_toast": "Enregistré. Clique sur « Appliquer » pour que le bot les prenne en compte.",
   "settings.changed_indicator": " (modifié)",
   "settings.none_placeholder": "Aucun",
-
   "people.title": "Identités et exclusions",
   "people.lede": "Relie une personne TeamSpeak, ou tout un grade TeamSpeak, à son nom de joueur. Seules les personnes connues peuvent demander une action à la voix. Coche « Administrateur » pour lui ouvrir toutes les pages de ce site.",
   "people.sec_identities": "Identités",
@@ -178,7 +186,6 @@
   "people.toast_self_remove": "Tu ne peux pas retirer ta propre ligne : tu perdrais l'accès à ces pages.",
   "people.toast_validation": "Donne un nom de joueur à chaque ligne, coche « Administrateur », ou retire-la.",
   "people.cannot_remove_own_admin": "Tu ne peux pas retirer tes propres droits.",
-
   "plugins.title": "Plugins",
   "plugins.lede": "Les plugins donnent au bot ses actions et ses connaissances (scores, classements…). Active-les, règle-les, puis teste la connexion.",
   "plugins.btn_test": "Tester",
@@ -191,7 +198,6 @@
   "plugins.label.scoreboard": "Tableau des scores (exemple)",
   "plugins.setting_name_label": "Nom du réglage",
   "plugins.setting_value_label": "Valeur",
-
   "stats.title": "Statistiques",
   "stats.lede": "Rapidité du bot et activité du salon.",
   "stats.label_period": "Période",
@@ -211,7 +217,6 @@
   "stats.empty_daily": "Aucune phrase sur cette période.",
   "stats.empty_actions": "Aucune action sur cette période.",
   "stats.minutes_short": "{min} min",
-
   "logs.title": "Journal",
   "logs.lede": "Ce que le bot note pendant qu'il tourne : connexions, phrases, réponses, erreurs. Les 500 dernières lignes depuis son démarrage.",
   "logs.switch_errors_only": "Seulement les problèmes",
@@ -220,24 +225,20 @@
   "logs.restart_requested": "Redémarrage demandé.",
   "logs.empty": "Rien pour l'instant.",
   "logs.aria_label": "Journal du bot",
-
   "time.just_now": "à l'instant",
   "time.mins_ago": "il y a {n} min",
   "time.hours_ago": "il y a {n} h",
   "time.days_ago": "il y a {n} j",
-
   "reasons.no_changes": "Aucun changement à enregistrer.",
   "reasons.phrase_required": "Écris d'abord une phrase.",
   "reasons.own_rights": "Tu ne peux pas retirer tes propres droits.",
   "reasons.site_self_stop": "Le site ne peut pas s'arrêter lui-même.",
-
   "presence.bot_offline": "Le bot n'est pas connecté pour l'instant.",
   "presence.user_offline": "Tu n'es pas connecté au serveur TeamSpeak.",
   "presence.wrong_channel": "Tu n'es pas dans le salon de {name}.",
   "presence.deaf": "Ton casque est coupé : tu n'entends pas le salon.",
   "presence.hearing": "Tu entends le salon : ce qui s'y dit s'affiche ici.",
   "presence.not_hearing": "{reason} Tu ne vois que ce que tu pouvais entendre : rien de nouveau ne s'affiche tant que tu n'écoutes pas le salon.",
-
   "error.login_required": "Connecte-toi d'abord.",
   "error.admin_only": "Réservé aux administrateurs.",
   "error.page_not_found": "Page inconnue.",
@@ -258,7 +259,6 @@
   "error.action_unknown": "Action inconnue.",
   "error.cannot_stop_self": "Le site ne peut pas s'arrêter lui-même : tu ne pourrais plus le relancer. Utilise « Redémarrer ».",
   "error.internal": "Erreur interne : {error}",
-
   "field.teamspeak.address.label": "Adresse du serveur TeamSpeak",
   "field.teamspeak.address.help": "Adresse IP ou nom, avec « :port » si ce n'est pas 9987.",
   "field.teamspeak.server_password.label": "Mot de passe du serveur",

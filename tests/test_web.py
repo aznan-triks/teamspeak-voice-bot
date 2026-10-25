@@ -115,21 +115,22 @@ class WebTest(unittest.TestCase):
         self.assertEqual(self.call(admin, "GET", "/api/conversation", query={"after_id": [str(ids[1])]}), [])
         self.assertIn("pas dans le salon", self.call(admin, "GET", "/api/presence")["reason"])
         self.assertIn("casque", self.call(member, "GET", "/api/presence")["reason"])
-        self.assertEqual(self.call(member, "GET", "/api/stats"), {"error": "Réservé aux administrateurs."})
+        self.assertEqual(self.call(member, "GET", "/api/logs"), {"error": "Réservé aux administrateurs."})
         self.assertEqual(self.call(None, "GET", "/api/me"), {"error": "Connecte-toi d'abord."})
+        self.assertEqual(self.call(member, "GET", "/api/stats")["stt_ms"]["count"], 2)
         self.assertEqual(self.call(admin, "GET", "/api/stats")["stt_ms"]["count"], 2)
         self.call(admin, "POST", "/api/restart")
         self.assertEqual(self.fake.restarts, 1)
 
     def test_admins_are_granted_and_removed_from_the_site(self):
         admin, member = self.login(ADMIN), self.login(MEMBER)
-        self.assertIn("error", self.call(member, "GET", "/api/stats"))
+        self.assertIn("error", self.call(member, "GET", "/api/logs"))
         cookie = self.app.login_finish(MEMBER["client_id"], self.code(MEMBER))[1]
         self.call(admin, "POST", "/api/settings", {"fields": {"web.admin_uids": ["member="]}})
-        self.assertNotIn("error", self.call(self.app.session(cookie), "GET", "/api/stats"))  # same session, checked again
+        self.assertNotIn("error", self.call(self.app.session(cookie), "GET", "/api/logs"))  # same session, checked again
         self.call(admin, "POST", "/api/settings", {"fields": {"web.admin_uids": [], "web.admin_groups": []}})
-        self.assertIn("error", self.call(self.app.session(cookie), "GET", "/api/stats"))
-        self.assertIn("error", self.call(self.app.session(self.app.login_finish(ADMIN["client_id"], self.code(ADMIN))[1]), "GET", "/api/stats"))
+        self.assertIn("error", self.call(self.app.session(cookie), "GET", "/api/logs"))
+        self.assertIn("error", self.call(self.app.session(self.app.login_finish(ADMIN["client_id"], self.code(ADMIN))[1]), "GET", "/api/logs"))
 
     def code(self, who):
         self.app.login_start(who["client_id"])
@@ -166,7 +167,7 @@ class WebTest(unittest.TestCase):
         # Default language (French) vs English error message
         self.assertEqual(self.call(None, "GET", "/api/me"), {"error": "Connecte-toi d'abord."})
         self.assertEqual(self.call(None, "GET", "/api/me", query={"lang": ["en"]}), {"error": "Please log in first."})
-        self.assertEqual(self.call(member, "GET", "/api/stats", query={"lang": ["en"]}), {"error": "Admins only."})
+        self.assertEqual(self.call(member, "GET", "/api/logs", query={"lang": ["en"]}), {"error": "Admins only."})
 
         # Presence reason in French vs English
         reason_fr = self.app.presence(MEMBER["uid"], lang="fr")["reason"]
@@ -187,6 +188,17 @@ class WebTest(unittest.TestCase):
         _TRANSLATIONS.setdefault("en", {}).pop("test_fallback_key", None)
         self.assertEqual(tr("test_fallback_key", "en"), "Valeur en français")
         _TRANSLATIONS["fr"].pop("test_fallback_key", None)
+
+    def test_member_can_opt_out_but_not_rename_or_make_the_bot_speak(self):
+        member = self.login(MEMBER)
+        prof = self.call(member, "GET", "/api/my/profile")
+        self.assertEqual((prof["identity"], prof["opt_out"]), ("Bob", False))
+        # A self-chosen name could claim another player and get points in their name: ignored.
+        saved = self.call(member, "POST", "/api/my/profile", {"identity": "Alice", "opt_out": True})
+        self.assertEqual((saved["identity"], saved["opt_out"]), ("Bob", True))
+        me = self.call(member, "GET", "/api/me")
+        self.assertEqual((me["identity"], me["opt_out"]), ("Bob", True))
+        self.assertIn("error", self.call(member, "POST", "/api/say", {"text": "Bonjour"}))
 
 
 class OldArchiveTest(unittest.TestCase):
