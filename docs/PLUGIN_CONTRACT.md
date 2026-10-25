@@ -48,7 +48,7 @@ ActionEvent(action: ProposedAction, status: str, result: str | None)
 `params` supports this JSON Schema subset, checked by the core before anything is proposed: an object with `properties` (`type`: string, integer, number, boolean; `enum`) and `required`. Unknown keys are refused. Use `enum` for names (players, games...): the LLM then cannot invent one.
 
 How an action flows:
-1. A sentence contains the wake word → the core sends the LLM the actions, the contexts and the last 20 lines.
+1. A sentence contains the wake word → the core sends the LLM the actions, the contexts and the last 20 to 30 lines.
 2. The LLM answers `propose`. The core checks: declared action, valid arguments, known person (`identity` not `None`).
 3. The bot reads `confirm_text` and waits 20 s (after it finished speaking) for "oui" / "non" from the **same UID**.
 4. "Oui" → `execute()`, and the returned sentence is read out. "Non", silence or an error → nothing is done.

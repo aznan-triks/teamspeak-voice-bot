@@ -68,6 +68,16 @@ def utterance(speaker, text, n=[0]):
     return Transcription(n[0], speaker, 0, 1000, text)
 
 
+class WindowTest(unittest.TestCase):
+    def test_conversation_is_trimmed_by_chunks(self):
+        bot = Bot(None, Archive(":memory:"), window=20)
+        for i in range(30):
+            bot.heard(utterance(BOB, f"phrase {i}"))
+        self.assertEqual((len(bot.window), bot.window[0]), (30, "[Bob] phrase 0"))  # same start: the LLM reuses its cache
+        bot.heard(utterance(BOB, "phrase 30"))
+        self.assertEqual((len(bot.window), bot.window[0], bot.window[-1]), (20, "[Bob] phrase 11", "[Bob] phrase 30"))
+
+
 class RouterTest(unittest.TestCase):
     def setup(self, llm, prompt_file="prompts/system_fr.txt"):
         self.voice, self.plugin = FakeVoice(), Scores()

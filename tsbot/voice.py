@@ -8,7 +8,6 @@ import os
 import subprocess
 import sys
 import time
-from collections import deque
 from pathlib import Path
 
 log = logging.getLogger(__name__)
@@ -104,10 +103,17 @@ class Bot:
 
     def __init__(self, voice: Voice | None, archive, window: int = 20):
         self.voice, self.archive, self.me = voice, archive, None
-        self.window = deque(maxlen=window)
+        self.window, self.size = [], window
 
     def heard(self, t) -> None:
-        self.window.append(f"[{t.speaker.identity or t.speaker.nickname}] {t.text}")
+        self._remember(f"[{t.speaker.identity or t.speaker.nickname}] {t.text}")
+
+    def _remember(self, line: str) -> None:
+        self.window.append(line)
+        # Trim by chunks, not one line at a time: the start of the conversation sent to the LLM then stays the
+        # same between trims, and the LLM reuses what it already read instead of reading everything again.
+        if len(self.window) > self.size * 3 // 2:
+            del self.window[:-self.size]
 
     def say(self, what: str) -> float:
         """Speak and archive the sentence. Returns its duration in seconds (0 if the voice failed)."""
@@ -120,7 +126,7 @@ class Bot:
             log.exception("the bot could not speak: %r", what)  # never stop listening because of the voice
             return 0.0
         name = self.me.nickname if self.me else "bot"
-        self.window.append(f"[{name}] {text}")
+        self._remember(f"[{name}] {text}")
         if self.me:
             self.archive.add(
                 started_ms=int(time.time() * 1000), duration_ms=int(seconds * 1000), client_id=self.me.client_id,
