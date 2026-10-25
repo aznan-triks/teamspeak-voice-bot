@@ -97,6 +97,7 @@ FIELDS = [
     ("follow", "enabled", "bool", "Suivre les joueurs", "Le bot va dans le salon où sont le plus de joueurs déclarés (page Identités). Si des joueurs se séparent, un deuxième bot vient dans l'autre salon, puis repart quand ils se retrouvent."),
     ("follow", "nickname_2", "str", "Pseudo du deuxième bot", "Garde « (enregistrement) » : les gens doivent savoir qu'il écoute."),
     ("llm", "follow_up_s", "int", "Temps pour poursuivre la conversation (s)", "Après une réponse du bot, on peut continuer à lui parler sans redire son nom pendant ce temps. 0 = toujours dire son nom."),
+    ("llm", "watch_for_actions", "bool", "Proposer des points sans qu'on l'appelle", "Le bot écoute tout et parle de lui-même seulement pour proposer une action (« Bob a gagné » → un point ?), jamais pour discuter. Chaque phrase part alors au LLM : seulement avec un LLM rapide (DeepSeek : 1 s, quelques centimes par soirée)."),
     ("llm", "confirm_timeout_s", "int", "Temps pour dire « oui » (s)", "Délai après la question du bot, avant d'abandonner l'action."),
     ("llm", "warm_up", "bool", "Préchauffage au démarrage", "Le LLM lit ses consignes une fois au démarrage : la première question est bien plus rapide."),
     ("llm", "base_url", "str", "Adresse du serveur LLM", "Serveur compatible OpenAI, par exemple http://127.0.0.1:8091/v1. Pour DeepSeek : https://api.deepseek.com, modèle deepseek-flash, clé de platform.deepseek.com (les phrases envoyées au bot partent alors chez DeepSeek)."),

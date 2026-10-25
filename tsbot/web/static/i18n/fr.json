@@ -303,6 +303,8 @@
   "field.follow.nickname_2.help": "Garde « (enregistrement) » : les gens doivent savoir qu'il écoute.",
   "field.llm.follow_up_s.label": "Temps pour poursuivre la conversation (s)",
   "field.llm.follow_up_s.help": "Après une réponse du bot, on peut continuer à lui parler sans redire son nom pendant ce temps. 0 = toujours dire son nom.",
+  "field.llm.watch_for_actions.label": "Proposer des points sans qu'on l'appelle",
+  "field.llm.watch_for_actions.help": "Le bot écoute tout et parle de lui-même seulement pour proposer une action (« Bob a gagné » → un point ?), jamais pour discuter. Chaque phrase part alors au LLM : seulement avec un LLM rapide (DeepSeek : 1 s, quelques centimes par soirée).",
   "field.llm.confirm_timeout_s.label": "Temps pour dire « oui » (s)",
   "field.llm.confirm_timeout_s.help": "Délai après la question du bot, avant d'abandonner l'action.",
   "field.llm.warm_up.label": "Préchauffage au démarrage",

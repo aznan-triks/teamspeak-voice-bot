@@ -303,6 +303,8 @@
   "field.follow.nickname_2.help": "Keep '(recording)': people need to know it is listening.",
   "field.llm.follow_up_s.label": "Conversation Follow-Up Window (s)",
   "field.llm.follow_up_s.help": "After a bot response, users can continue talking without repeating its name during this window. 0 = always require the wake word.",
+  "field.llm.watch_for_actions.label": "Propose Points Unprompted",
+  "field.llm.watch_for_actions.help": "The bot listens to everything and speaks up on its own only to propose an action ('Bob won' → a point?), never to chat. Every sentence then goes to the LLM: only with a fast one (DeepSeek: 1 s, a few cents a night).",
   "field.llm.confirm_timeout_s.label": "Action Confirmation Timeout (s)",
   "field.llm.confirm_timeout_s.help": "Time allowed to confirm ('yes') after the bot proposes an action, before cancelling.",
   "field.llm.warm_up.label": "Warm Up at Startup",
