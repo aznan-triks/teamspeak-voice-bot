@@ -87,6 +87,10 @@ class Router:
             return
         kind = reply.get("type")
         if kind in ("answer", "clarify", "explain") and isinstance(reply.get("text"), str):
+            said = [line.split("] ", 1)[-1] for line in self.bot.window[-6:]]
+            if reply["text"].strip().lower() in (s.strip().lower() for s in said):
+                log.info("repeated answer not said again: %s", reply["text"][:80])  # small models copy their last line
+                return
             seconds = self.bot.say(reply["text"])
             self.conversing_until = now + time.monotonic() - asked + seconds + self.cfg.get("follow_up_s", 30)
             self.partner = t.speaker.uid

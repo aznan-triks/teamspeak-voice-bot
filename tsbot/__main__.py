@@ -131,7 +131,7 @@ def run(cfg: dict, logs=None) -> None:
     from .stt import Transcriber
     from .voice import Bot, Voice
 
-    transcribe = Transcriber(cfg.get("stt", {}))
+    transcribe = Transcriber(cfg.get("stt", {}), api_key=cfg.get("llm", {}).get("api_key", ""))
     archive = Archive(cfg.get("archive", {}).get("path", "data/archive.sqlite3"))
     loaded = plugins.load(cfg)
     bridge = spawn_bridge(cfg["teamspeak"])
@@ -145,6 +145,19 @@ def run(cfg: dict, logs=None) -> None:
 
         router = Router(cfg["llm"], LLM(cfg["llm"]), bot, loaded)
     state = State()
+
+    def names() -> list:
+        """What speech-to-text should expect: known people, connected nicknames, players, the wake words."""
+        found = list(cfg.get("identities", {}).values()) + [c.get("nickname", "") for c in state.clients]
+        for p in loaded:
+            try:
+                ctx = p.context() if hasattr(p, "context") else {}
+            except Exception:
+                ctx = {}
+            found += [n for v in ctx.values() if isinstance(v, list) for n in v if isinstance(n, str)]
+        return found + cfg.get("llm", {}).get("wake_words", [])
+
+    transcribe.names = names
     if cfg.get("web", {}).get("control", True):
         Control(cfg, bot, voice, router, loaded, state, logs).start()
     try:

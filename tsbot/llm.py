@@ -20,7 +20,8 @@ class LLM:
     def __init__(self, cfg: dict):
         self.url = cfg["base_url"].rstrip("/")
         self.model = cfg.get("model", "")
-        self.key = os.environ.get("LLM_API_KEY") or cfg.get("api_key", "")
+        self.key = cfg.get("api_key") or os.environ.get("LLM_API_KEY", "")  # the site's setting wins over .env
+        self.temperature = cfg.get("temperature", 0.5)  # 0 made a small model repeat itself word for word
         self.timeout = cfg.get("timeout_s", 20)
         self.json_mode = cfg.get("json_mode", True)
 
@@ -39,12 +40,11 @@ class LLM:
         except Exception:
             return False
 
-    def chat(self, system: str, user: str) -> dict:
-        body = {
-            "model": self.model,
-            "temperature": 0,
-            "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
-        }
+    def request_chat(self, messages: list) -> str:
+        body = {"model": self.model, "temperature": self.temperature, "messages": messages}
         if self.json_mode:
             body["response_format"] = {"type": "json_object"}
-        return parse_reply(self._request("/chat/completions", body)["choices"][0]["message"]["content"])
+        return self._request("/chat/completions", body)["choices"][0]["message"]["content"] or ""
+
+    def chat(self, system: str, user: str) -> dict:
+        return parse_reply(self.request_chat([{"role": "system", "content": system}, {"role": "user", "content": user}]))

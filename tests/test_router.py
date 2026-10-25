@@ -151,6 +151,13 @@ class RouterTest(unittest.TestCase):
         self.hear(ALICE, "bon on lance la partie", now=100)  # long after: not sent to the LLM
         self.assertEqual(llm.calls, 2)
 
+    def test_the_same_answer_is_never_said_twice(self):
+        answer = {"type": "answer", "text": "Salut !"}
+        self.setup(FakeLLM(answer, answer))
+        self.hear(ALICE, "jarvis ça va ?", now=1)
+        self.hear(ALICE, "jarvis tu m'entends ?", now=5)
+        self.assertEqual(self.voice.said, ["Salut !"])
+
     def test_personality_is_added_to_the_prompt(self):
         self.setup(FakeLLM())
         router = Router({"wake_words": ["jarvis"], "personality": "Tu es drôle."}, FakeLLM(), self.bot, [])

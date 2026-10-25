@@ -1,0 +1,65 @@
+"""Gemini transcription: the expected names go with the audio; when Gemini fails, the local model answers."""
+import importlib.util
+import json
+import threading
+import unittest
+from http.server import BaseHTTPRequestHandler, HTTPServer
+
+from tsbot.stt import Transcriber
+
+
+class FakeGemini(BaseHTTPRequestHandler):
+    requests, fail = [], False
+
+    def do_POST(self):
+        body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+        FakeGemini.requests.append((self.headers.get("Authorization"), body))
+        if FakeGemini.fail:
+            self.send_response(429)
+            self.end_headers()
+            return
+        data = json.dumps({"choices": [{"message": {"content": " Wesh BaJell, tu lances ? "}}]}).encode()
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.end_headers()
+        self.wfile.write(data)
+
+    def log_message(self, *_):
+        pass
+
+
+class FakeLocal:
+    def recognize(self, audio, sample_rate, **options):
+        return "local"
+
+
+class GeminiTest(unittest.TestCase):
+    def setUp(self):
+        self.server = HTTPServer(("127.0.0.1", 0), FakeGemini)
+        threading.Thread(target=self.server.serve_forever, daemon=True).start()
+        url = f"http://127.0.0.1:{self.server.server_address[1]}"
+        self.stt = Transcriber({"engine": "gemini", "gemini_url": url, "lazy": True}, api_key="k")
+        self.stt._local, self.stt.options = FakeLocal(), {}
+        self.stt.names = lambda: ["BaJell", "IPKOZ", "BaJell"]
+
+    def tearDown(self):
+        self.server.shutdown()
+
+    def test_names_go_with_the_audio_and_failures_fall_back(self):
+        pcm = b"\x00\x01" * 16000
+        self.assertEqual(self.stt(pcm), "Wesh BaJell, tu lances ?")
+        auth, body = FakeGemini.requests[-1]
+        self.assertEqual(auth, "Bearer k")
+        self.assertIn("BaJell, IPKOZ.", body["messages"][0]["content"])  # each name once
+        self.assertEqual(body["messages"][1]["content"][0]["input_audio"]["format"], "wav")
+        if importlib.util.find_spec("numpy") is None:
+            self.skipTest("numpy (installed in the Docker image) is needed for the local fallback")
+        FakeGemini.fail = True
+        try:
+            self.assertEqual(self.stt(pcm), "local")
+        finally:
+            FakeGemini.fail = False
+
+
+if __name__ == "__main__":
+    unittest.main()
