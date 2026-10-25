@@ -15,6 +15,10 @@ max_utterance_s = 30                     # long speeches are cut into pieces of 
 # "nemo-parakeet-tdt-0.6b-v3" is a bit faster but guesses the language (short sounds often come out as English).
 model = "nemo-canary-1b-v2"
 language = "fr"
+# To judge another model on real voices: it transcribes the same sounds in the background and the log shows both texts.
+# compare_model = "onnx-community/whisper-large-v3-turbo"
+# compare_threads = 2       # CPU cores it may use
+# compare_nice = 15         # lower priority than the bot
 min_utterance_ms = 400    # shorter sounds are ignored (coughs, clicks)
 noise_phrases = ["merci"] # what the model writes for a short noise: dropped when shorter than noise_max_ms
 noise_max_ms = 1500

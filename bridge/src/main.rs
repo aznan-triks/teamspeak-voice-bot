@@ -25,8 +25,10 @@ use tsproto_packets::packets::{AudioData, CodecType, OutAudio};
 
 /// 20 ms of 48 kHz interleaved stereo: the AudioHandler's output format.
 const TICK_SAMPLES: usize = 48_000 / 50 * 2;
-/// 3 stereo frames at 48 kHz = 1 mono sample at 16 kHz.
-const DECIMATION: usize = 6;
+/// 48 kHz → 16 kHz: one sample in three, after the low-pass filter.
+const DECIMATION: usize = 3;
+/// Low-pass filter length: 127 taps put the cut between 7 and 8 kHz, so nothing above 8 kHz folds back as hiss.
+const TAPS: usize = 127;
 /// 20 ms of 48 kHz mono: one Opus frame of the bot's voice.
 const SEND_FRAME: usize = 48_000 / 50;
 
@@ -68,7 +70,56 @@ fn read_commands(commands: Sender<Command>) -> Result<()> {
 struct Speech {
 	started_ms: u128,
 	who: Value, // read when the person starts talking: they may have left by the time they stop
-	pcm: Vec<i16>,
+	pcm: Vec<f32>, // 48 kHz mono, converted to 16 kHz once the person stops
+}
+
+/// Windowed-sinc (Blackman) low-pass, then decimation: the old 3-sample average let 8-16 kHz fold onto
+/// "s", "ch" and "f" as noise, which speech-to-text heard as other words.
+fn to_16k(x: &[f32]) -> Vec<i16> {
+	use std::f32::consts::PI;
+	let fc = 7_000.0 / 48_000.0;
+	let mid = (TAPS / 2) as f32;
+	let mut h: Vec<f32> = (0..TAPS)
+		.map(|i| {
+			let n = i as f32 - mid;
+			let sinc = if n == 0.0 { 2.0 * fc } else { (2.0 * PI * fc * n).sin() / (PI * n) };
+			let t = 2.0 * PI * i as f32 / (TAPS - 1) as f32;
+			sinc * (0.42 - 0.5 * t.cos() + 0.08 * (2.0 * t).cos())
+		})
+		.collect();
+	let sum: f32 = h.iter().sum();
+	h.iter_mut().for_each(|v| *v /= sum); // unit gain: the volume does not change
+	(0..x.len())
+		.step_by(DECIMATION)
+		.map(|c| {
+			let start = c as isize - mid as isize;
+			let acc: f32 = h
+				.iter()
+				.enumerate()
+				.filter_map(|(k, hk)| x.get(usize::try_from(start + k as isize).ok()?).map(|v| hk * v))
+				.sum();
+			(acc * 32767.0).clamp(-32768.0, 32767.0) as i16
+		})
+		.collect()
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	fn tone(hz: f32) -> Vec<f32> {
+		(0..48_000).map(|i| 0.5 * (2.0 * std::f32::consts::PI * hz * i as f32 / 48_000.0).sin()).collect()
+	}
+
+	fn level(x: &[i16]) -> f32 { x[1000..x.len() - 1000].iter().map(|&v| (v as f32).abs()).fold(0.0, f32::max) }
+
+	#[test]
+	fn speech_passes_and_high_hiss_is_removed() {
+		let speech = level(&to_16k(&tone(1_000.0)));
+		assert!((speech - 0.5 * 32767.0).abs() < 0.02 * 32767.0, "1 kHz kept at the same volume: {speech}");
+		assert!(level(&to_16k(&tone(12_000.0))) < 0.005 * 32767.0, "12 kHz would fold onto 4 kHz");
+		assert_eq!(to_16k(&tone(1_000.0)).len(), 16_000);
+	}
 }
 
 fn env(key: &str, default: &str) -> String { std::env::var(key).unwrap_or_else(|_| default.into()) }
@@ -255,24 +306,21 @@ async fn main() -> Result<()> {
 						emit(&out, json!({ "event": "speaking", "speaker": who }), &[]); // live view: someone starts talking
 						Speech { started_ms: now_ms(), who, pcm: Vec::new() }
 					});
-					// shortcut: box-filter decimation (averaging), good enough for speech recognition;
-					// switch to a real resampler if archived audio quality ever matters.
-					s.pcm.extend(samples.chunks(DECIMATION).map(|c| {
-						(c.iter().sum::<f32>() / c.len() as f32 * 32767.0).clamp(-32768.0, 32767.0) as i16
-					}));
+					s.pcm.extend(samples.chunks(2).map(|lr| lr.iter().sum::<f32>() / lr.len() as f32)); // stereo → mono
 				});
-				// End of speech, or a monologue cut into pieces: Whisper works on 30 s windows.
+				// End of speech, or a monologue cut into pieces: the speech model works on 30 s windows.
 				talking.retain(|id, s| {
-					let done = ended.contains(id) || s.pcm.len() >= max_samples;
+					let done = ended.contains(id) || s.pcm.len() >= max_samples * DECIMATION;
 					if done && !s.pcm.is_empty() {
+						let pcm = to_16k(&s.pcm);
 						let header = json!({
 							"event": "utterance",
 							"speaker": s.who,
 							"started_ms": s.started_ms as u64,
-							"samples": s.pcm.len(),
+							"samples": pcm.len(),
 							"listeners": listeners(&con), // who may read it later: those who could hear it
 						});
-						emit(&out, header, &s.pcm);
+						emit(&out, header, &pcm);
 					}
 					!done
 				});

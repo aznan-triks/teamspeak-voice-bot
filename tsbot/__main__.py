@@ -95,6 +95,8 @@ def serve(stream, transcribe, archive: Archive, loaded: list, cfg: dict, bot=Non
         if bot:
             bot.listeners = header.get("listeners", bot.listeners)
         log.info("[%s] %s  (%d ms audio, %d ms STT)", speaker.identity or speaker.nickname, text, duration_ms, stt_ms)
+        if hasattr(transcribe, "compare"):
+            transcribe.compare(pcm, speaker.identity or speaker.nickname, text)
         t = Transcription(archive_id, speaker, header.get("started_ms", 0), duration_ms, text)
         if bot:
             bot.heard(t)

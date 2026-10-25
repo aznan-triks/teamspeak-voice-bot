@@ -11,7 +11,10 @@ import difflib
 import io
 import logging
 import os
+import queue
 import re
+import threading
+import time
 import unicodedata
 import wave
 
@@ -72,18 +75,55 @@ class Transcriber:
         if not cfg.get("lazy"):
             self.local()  # loaded now even with Gemini: it is the fallback, and loading takes a few seconds
 
+    def load(self, model: str, threads: int = 0):
+        import onnx_asr  # late import: heavy, and not needed by the tests
+        import onnxruntime
+
+        options = onnxruntime.SessionOptions()
+        options.intra_op_num_threads = threads  # 0 = onnxruntime's default (all cores)
+        # Canary and Whisper take the language; Parakeet has no such option and guesses it.
+        takes_language = self.cfg.get("language") and ("canary" in model or "whisper" in model)
+        loaded = onnx_asr.load_model(model, quantization="int8", sess_options=options)
+        return loaded, {"language": self.cfg["language"]} if takes_language else {}
+
     def local(self):
         if self._local is None:
-            import onnx_asr  # late import: heavy, and not needed by the tests
-
-            model = self.cfg.get("model", "nemo-canary-1b-v2")
-            self._local = onnx_asr.load_model(model, quantization="int8")
-            # Canary takes the language; Parakeet has no such option and guesses it.
-            self.options = {"language": self.cfg["language"]} if self.cfg.get("language") and "canary" in model else {}
+            self._local, self.options = self.load(self.cfg.get("model", "nemo-canary-1b-v2"))
         return self._local
 
     def __call__(self, pcm: bytes) -> str:
         return fix_names(self.transcribe(pcm), self.names())
+
+    def compare(self, pcm: bytes, who: str, text: str) -> None:
+        """Optional second model on the same sound, in the background, logged next to the first one's text so both
+        can be judged on real voices (the sound itself is never kept). When it lags behind, sounds are skipped."""
+        name = self.cfg.get("compare_model")
+        if not name:
+            return
+        if not hasattr(self, "queue"):
+            self.queue = queue.Queue(maxsize=self.cfg.get("compare_queue", 3))
+            threading.Thread(target=self._compare_loop, args=(name,), daemon=True).start()
+        try:
+            self.queue.put_nowait((pcm, who, text))
+        except queue.Full:
+            log.info("compare: second model busy, sound skipped")
+
+    def _compare_loop(self, name: str) -> None:
+        import numpy as np
+
+        if hasattr(os, "setpriority"):  # Linux: this thread (and the model's threads it starts) yield to the bot
+            os.setpriority(os.PRIO_PROCESS, threading.get_native_id(), self.cfg.get("compare_nice", 15))
+        model, options = self.load(name, self.cfg.get("compare_threads", 2))
+        while True:
+            pcm, who, text = self.queue.get()
+            started = time.monotonic()
+            try:
+                other = model.recognize(np.frombuffer(pcm, np.int16).astype(np.float32) / 32768.0, sample_rate=16000, **options)
+            except Exception:
+                log.exception("compare: %s failed", name)
+                continue
+            log.info("compare [%s] %s: %s | %s: %s  (%d ms)", who, self.cfg.get("model", "nemo-canary-1b-v2"), text, name,
+                     fix_names(other.strip(), self.names()), (time.monotonic() - started) * 1000)
 
     def transcribe(self, pcm: bytes) -> str:
         if self.cloud is not None:
