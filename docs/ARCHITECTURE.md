@@ -46,8 +46,10 @@ teamspeak-voice-bot/
 │   ├── voice.py              Voice (files, Phonon, Piper, cache) and Bot (say + remember)
 │   ├── llm.py                OpenAI-compatible client (urllib, no SDK)
 │   ├── router.py             wake word, LLM, confirmation, degraded mode
-│   ├── archive.py            SQLite: utterances + actions, JSON lines export
+│   ├── archive.py            SQLite: utterances, actions, LLM timings, JSON lines export
 │   ├── plugins.py            plugin contract types, loading, isolation
+│   ├── control.py            local control API for the management site
+│   ├── web/                  management site (python -m tsbot.web): server, pages in static/
 │   └── plugins_examples/     scoreboard.py (voice action example)
 ├── prompts/system_fr.txt     LLM system prompt (French, see prompts/README.md)
 ├── docs/                     this file, PLUGIN_CONTRACT.md
@@ -64,11 +66,16 @@ teamspeak-voice-bot/
 {"event":"ready","speaker":{...}}
 {"event":"utterance","speaker":{...},"started_ms":1761355442000,"samples":16000}<32000 bytes>
 {"event":"played"}
+{"event":"speaking","speaker":{...}}
+{"event":"clients","clients":[{...speaker}, ...]}
+{"event":"text","speaker":{...},"text":"..."}
 ```
 
-`speaker` = `{client_id, uid, nickname, server_groups: [names], channel_id}`, read when the person **starts** talking (they may have left by the time they stop). `played` = the bot finished saying everything it was given.
+`speaker` = `{client_id, uid, nickname, server_groups: [names], channel_id}`, read when the person **starts** talking (they may have left by the time they stop). `played` = the bot finished saying everything it was given. `speaking` = someone starts talking (live view). `clients` = everyone connected, answer to the `clients` command. `text` = a private text message to the bot.
 
-**Bridge stdin**: `{"cmd":"play","samples":N}` then N samples of 16-bit little-endian PCM, 48 kHz, mono. The bridge queues it, encodes 20 ms Opus frames and sends one per tick, then an empty packet (end of speech).
+**Bridge stdin**: `{"cmd":"play","samples":N}` then N samples of 16-bit little-endian PCM, 48 kHz, mono. The bridge queues it, encodes 20 ms Opus frames and sends one per tick, then an empty packet (end of speech). `{"cmd":"message","client_id":N,"text":"..."}` sends a private text message; `{"cmd":"clients"}` asks for the client list.
+
+**Control API** (`tsbot/control.py`, 127.0.0.1 only, token in `[web] token_file`): `GET /state`, `GET /logs?after=N`, `GET /voice?text=`, `POST /say`, `POST /message`, `POST /restart` (the bot quits; the service manager starts it again). The management site (`tsbot/web/`) uses only this API and a read-only view of the archive.
 
 **Environment variables**: `TS_ADDRESS`, `TS_NICKNAME`, `TS_CHANNEL`, `TS_CHANNEL_PASSWORD`, `TS_SERVER_PASSWORD`, `TS_IDENTITY_FILE`, `TS_MAX_UTTERANCE_S`. SIGINT disconnects cleanly; a closed stdout stops the bridge.
 

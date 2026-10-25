@@ -61,3 +61,15 @@ enabled = []              # e.g. ["tsbot.plugins_examples.scoreboard", "my_plugi
 # players = ["Alice", "Bob"]
 # games = ["Fléchettes", "Rocket League"]
 # path = "/data/scoreboard.json"
+
+[web]
+# The management site (python -m tsbot.web): open http://THIS-MACHINE:8095 from your home network.
+# People log in with a code the bot sends them in a private TeamSpeak message.
+port = 8095
+host = "0.0.0.0"                 # "127.0.0.1" to reach it only from this machine
+control_port = 8096              # the bot's local control API, used by the site; change it if the port is taken
+token_file = "/data/control_token"
+settings_file = "/data/settings.json"   # what the site changes, on top of this file
+secret_file = "/data/web_secret"
+admin_groups = ["Server Admin"]  # TeamSpeak server groups whose members manage the bot from the site
+admin_uids = []                  # or single people, by TeamSpeak UID

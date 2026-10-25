@@ -7,6 +7,7 @@ import logging
 import os
 import subprocess
 import sys
+import threading
 import time
 from pathlib import Path
 
@@ -47,6 +48,7 @@ class Voice:
     def __init__(self, cfg: dict, sink):
         self.cfg = cfg
         self.sink = sink  # the bridge's stdin
+        self.lock = threading.Lock()  # the main loop and the control API both write to the bridge
         self.phrases = {**DEFAULT_PHRASES, **cfg.get("phrases", {})}
         self.cache = Path(cfg.get("cache_dir", "data/tts_cache"))
         self.engine = None  # chosen on first use
@@ -56,9 +58,14 @@ class Voice:
         text = self.phrases.get(what, what)
         path = Path(text) if text.lower().endswith(AUDIO_FILES) else self.speech_file(text)
         pcm = decode(path)
-        self.sink.write(json.dumps({"cmd": "play", "samples": len(pcm) // 2}).encode() + b"\n" + pcm)
-        self.sink.flush()
+        self.send({"cmd": "play", "samples": len(pcm) // 2}, pcm)
         return text, len(pcm) / 2 / SEND_RATE
+
+    def send(self, command: dict, pcm: bytes = b"") -> None:
+        """One command line to the bridge, followed by its audio if any."""
+        with self.lock:
+            self.sink.write(json.dumps(command, ensure_ascii=False).encode() + b"\n" + pcm)
+            self.sink.flush()
 
     def speech_file(self, text: str) -> Path:
         """Text-to-speech, cached: a sentence is generated once, then replayed from disk."""

@@ -3,7 +3,10 @@
 //! Joins a server, receives the channel's voice, decodes it per speaker (Opus → PCM) and writes
 //! each utterance to stdout: one JSON line, then `samples` × 2 bytes of 16-bit PCM, 16 kHz, mono.
 //! Reads `{"cmd":"play","samples":N}` + N samples of 16-bit PCM, 48 kHz, mono on stdin and says
-//! them in the channel. Logs go to stderr. Full protocol: docs/ARCHITECTURE.md §3.
+//! them in the channel; `{"cmd":"message","client_id":N,"text":"..."}` sends a private text message;
+//! `{"cmd":"clients"}` answers with the list of connected clients. Private messages to the bot become
+//! `{"event":"text"}` lines. Logs go to stderr.
+//! Full protocol: docs/ARCHITECTURE.md §3.
 
 use std::collections::{HashMap, VecDeque};
 use std::io::{BufRead, Read, Write};
@@ -16,7 +19,7 @@ use audiopus::{Application, Channels, SampleRate};
 use futures::prelude::*;
 use serde_json::{json, Value};
 use tsclientlib::audio::AudioHandler;
-use tsclientlib::{ClientId, Connection, DisconnectOptions, Identity, StreamItem};
+use tsclientlib::{ClientId, Connection, DisconnectOptions, Identity, OutCommandExt, StreamItem};
 use tsproto_packets::packets::{AudioData, CodecType, OutAudio};
 
 /// 20 ms of 48 kHz interleaved stereo: the AudioHandler's output format.
@@ -26,8 +29,14 @@ const DECIMATION: usize = 6;
 /// 20 ms of 48 kHz mono: one Opus frame of the bot's voice.
 const SEND_FRAME: usize = 48_000 / 50;
 
-/// Reads play commands from stdin until it closes. Each command becomes one block of samples.
-fn read_commands(audio: Sender<Vec<i16>>) -> Result<()> {
+enum Command {
+	Play(Vec<i16>),
+	Message(u16, String),
+	Clients,
+}
+
+/// Reads commands from stdin until it closes.
+fn read_commands(commands: Sender<Command>) -> Result<()> {
 	let mut stdin = std::io::stdin().lock();
 	let mut line = String::new();
 	while stdin.read_line(&mut line)? > 0 {
@@ -35,9 +44,20 @@ fn read_commands(audio: Sender<Vec<i16>>) -> Result<()> {
 		let samples = cmd["samples"].as_u64().unwrap_or(0) as usize;
 		let mut bytes = vec![0u8; samples * 2];
 		stdin.read_exact(&mut bytes)?;
-		if cmd["cmd"] == "play" {
-			let _ = audio.send(bytes.chunks_exact(2).map(|b| i16::from_le_bytes([b[0], b[1]])).collect());
-		}
+		let command = match cmd["cmd"].as_str() {
+			Some("play") => Command::Play(bytes.chunks_exact(2).map(|b| i16::from_le_bytes([b[0], b[1]])).collect()),
+			Some("message") => Command::Message(
+				cmd["client_id"].as_u64().unwrap_or(0) as u16,
+				cmd["text"].as_str().unwrap_or("").to_string(),
+			),
+			Some("clients") => Command::Clients,
+			other => {
+				tracing::warn!(?other, "unknown command ignored");
+				line.clear();
+				continue;
+			}
+		};
+		let _ = commands.send(command);
 		line.clear();
 	}
 	Ok(())
@@ -145,9 +165,9 @@ async fn main() -> Result<()> {
 	let own = con.get_state()?.own_client.0;
 	emit(&out, json!({ "event": "ready", "speaker": speaker(&con, own) }), &[]);
 
-	let (voice_in, voice) = channel::<Vec<i16>>();
+	let (commands_in, commands) = channel::<Command>();
 	std::thread::spawn(move || {
-		if let Err(error) = read_commands(voice_in) {
+		if let Err(error) = read_commands(commands_in) {
 			tracing::error!(%error, "stdin closed or unreadable: the bot can no longer speak");
 		}
 	});
@@ -173,7 +193,23 @@ async fn main() -> Result<()> {
 		match item {
 			None => {
 				// The bot's voice: one 20 ms Opus frame per tick, so it plays at normal speed.
-				to_say.extend(voice.try_iter().flatten());
+				for command in commands.try_iter() {
+					match command {
+						Command::Play(samples) => to_say.extend(samples),
+						Command::Message(id, text) => {
+							let msg = con.get_state()?.clients.get(&ClientId(id)).map(|c| c.send_textmessage(&text));
+							match msg {
+								Some(msg) => msg.send(&mut con)?,
+								None => tracing::warn!(id, "message not sent: client not found"),
+							}
+						}
+						Command::Clients => {
+							let ids: Vec<u16> = con.get_state()?.clients.keys().map(|c| c.0).collect();
+							let clients: Vec<Value> = ids.into_iter().map(|id| speaker(&con, id)).collect();
+							emit(&out, json!({ "event": "clients", "clients": clients }), &[]);
+						}
+					}
+				}
 				if !to_say.is_empty() {
 					let mut frame: Vec<i16> = to_say.drain(..to_say.len().min(SEND_FRAME)).collect();
 					frame.resize(SEND_FRAME, 0); // pad the last frame with silence
@@ -190,9 +226,11 @@ async fn main() -> Result<()> {
 
 				buf.fill(0.0);
 				let ended = audio.fill_buffer_with_proc(&mut buf, |id, samples| {
-					let s = talking
-						.entry(*id)
-						.or_insert_with(|| Speech { started_ms: now_ms(), who: speaker(&con, *id), pcm: Vec::new() });
+					let s = talking.entry(*id).or_insert_with(|| {
+						let who = speaker(&con, *id);
+						emit(&out, json!({ "event": "speaking", "speaker": who }), &[]); // live view: someone starts talking
+						Speech { started_ms: now_ms(), who, pcm: Vec::new() }
+					});
 					// shortcut: box-filter decimation (averaging), good enough for speech recognition;
 					// switch to a real resampler if archived audio quality ever matters.
 					s.pcm.extend(samples.chunks(DECIMATION).map(|c| {
@@ -216,8 +254,17 @@ async fn main() -> Result<()> {
 			}
 			Some(None) => bail!("connection closed by the server"),
 			Some(Some(e)) => {
+				let e = e?;
+				// Private text messages to the bot (login codes, commands typed in the chat).
+				if let StreamItem::BookEvents(events) = &e {
+					for event in events {
+						if let tsclientlib::events::Event::Message { target: tsclientlib::MessageTarget::Client(_), invoker, message } = event {
+							emit(&out, json!({ "event": "text", "speaker": speaker(&con, invoker.id.0), "text": message }), &[]);
+						}
+					}
+				}
 				// Whispers (S2CWhisper) are private: never decoded, never archived.
-				if let StreamItem::Audio(packet) = e? {
+				if let StreamItem::Audio(packet) = e {
 					let from = match packet.data().data() {
 						AudioData::S2C { from, .. } => Some(*from),
 						_ => None,

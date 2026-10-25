@@ -2,6 +2,7 @@ services:
   tsbot:
     build: .
     restart: unless-stopped
+    network_mode: host # the management site reaches the bot's control API on 127.0.0.1
     volumes:
       - ./config.toml:/app/config.toml:ro
       - ./data:/data # bot identity, SQLite archive, models, voice cache
@@ -20,3 +21,16 @@ services:
         limits:
           cpus: "3" # leave room for the other services on a small machine
           memory: 3g
+
+  web:
+    # The management site: same image, its own process. It talks to the bot through the bot's local control API.
+    build: .
+    restart: unless-stopped
+    command: ["python", "-m", "tsbot.web"]
+    network_mode: host # reaches the bot's control API on 127.0.0.1 and serves port 8095
+    volumes:
+      - ./config.toml:/app/config.toml:ro
+      - ./data:/data
+      - ./plugins:/app/plugins:ro
+    environment:
+      PYTHONPATH: /app/plugins

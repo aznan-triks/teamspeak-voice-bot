@@ -13,6 +13,7 @@ class Plugin:
     def on_ready(self, me: Speaker) -> None: ...             # the bot's own profile, once connected
     def on_transcription(self, t: Transcription) -> None: ... # every saved sentence
     def on_command(self, t: Transcription) -> None: ...      # a sentence that contains the wake word
+    def on_text(self, message: tuple[Speaker, str]) -> None: ... # a private text message sent to the bot
 ```
 
 ```python

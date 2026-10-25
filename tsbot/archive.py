@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import threading
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS utterances (
@@ -28,20 +29,29 @@ CREATE TABLE IF NOT EXISTS actions (
     utterance_ids TEXT,
     status        TEXT NOT NULL,
     result        TEXT
+);
+CREATE TABLE IF NOT EXISTS llm_calls (
+    id         INTEGER PRIMARY KEY,
+    started_ms INTEGER NOT NULL,
+    ms         INTEGER NOT NULL,
+    ok         INTEGER NOT NULL
 )"""
 
 
 class Archive:
     def __init__(self, path: str):
-        self.db = sqlite3.connect(path)
+        # The control API speaks from its own thread: one connection shared under a lock.
+        self.db = sqlite3.connect(path, check_same_thread=False)
+        self.lock = threading.Lock()
         self.db.row_factory = sqlite3.Row
         self.db.execute("PRAGMA journal_mode=WAL")
         self.db.executescript(SCHEMA)
 
     def _insert(self, table: str, row: dict) -> int:
         cols = ", ".join(row)
-        cur = self.db.execute(f"INSERT INTO {table} ({cols}) VALUES ({', '.join('?' * len(row))})", list(row.values()))
-        self.db.commit()  # commit right away: a crash loses at most the sentence being processed
+        with self.lock:
+            cur = self.db.execute(f"INSERT INTO {table} ({cols}) VALUES ({', '.join('?' * len(row))})", list(row.values()))
+            self.db.commit()  # commit right away: a crash loses at most the sentence being processed
         return cur.lastrowid
 
     def add(self, **row) -> int:
@@ -56,8 +66,12 @@ class Archive:
         })
 
     def set_action_status(self, action_id: int, status: str, result: str | None = None) -> None:
-        self.db.execute("UPDATE actions SET status = ?, result = ? WHERE id = ?", (status, result, action_id))
-        self.db.commit()
+        with self.lock:
+            self.db.execute("UPDATE actions SET status = ?, result = ? WHERE id = ?", (status, result, action_id))
+            self.db.commit()
+
+    def add_llm_call(self, started_ms: int, ms: int, ok: bool) -> int:
+        return self._insert("llm_calls", {"started_ms": started_ms, "ms": ms, "ok": int(ok)})
 
     def export_jsonl(self, out) -> int:
         n = 0

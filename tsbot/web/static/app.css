@@ -1,0 +1,216 @@
+/* Look of the TeamSpeak 6 client: its own dark theme values (main.css of the TS6 client). */
+:root {
+  --contrast: #131824;
+  --rail: #20242e;
+  --bg: #252934;
+  --panel: #2c3140;
+  --panel-2: #333947;
+  --line: #1d1f20;
+  --edge: #3b4254;
+  --text: #d2d2d2;
+  --strong: #e1e1e1;
+  --muted: #a0a0a0;
+  --soft: #bbd6f3;
+  --accent: #2580c3;
+  --accent-ink: #ffffff;
+  --info: #16bcfb;
+  --menu-bg: #213450;
+  --menu-hover: #1f2e44;
+  --menu-edge: #274266;
+  --menu-text: #8ac5fc;
+  --talk: #13f78d;
+  --warn: #f75413;
+  --bad: #f82929;
+  --focus: #16bcfb;
+  --radius-s: 4px;
+  --radius-l: 8px;
+  --sans: "Noto Sans", -apple-system, BlinkMacSystemFont, "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  --mono: Consolas, ui-monospace, monospace;
+  color-scheme: dark;
+}
+:root[data-theme="light"] {
+  --contrast: #dfe4ec;
+  --rail: #e9edf3;
+  --bg: #f4f6fa;
+  --panel: #ffffff;
+  --panel-2: #edf0f5;
+  --line: #d6dce6;
+  --edge: #c6cedb;
+  --text: #262b36;
+  --strong: #10141c;
+  --muted: #5d6677;
+  --soft: #2f5f8f;
+  --accent: #1c82cc;
+  --info: #0a86b8;
+  --menu-bg: #dcecfb;
+  --menu-hover: #e8f2fc;
+  --menu-edge: #b9d6f2;
+  --menu-text: #175a93;
+  --talk: #0c9a5a;
+  --warn: #c2410c;
+  --bad: #d11a1a;
+  --focus: #1c82cc;
+  color-scheme: light;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--bg); color: var(--text); font: 450 15px/1.45 var(--sans); }
+a { color: var(--menu-text); }
+button, input, select, textarea { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+.skip { position: absolute; left: -999px; }
+.skip:focus { left: 12px; top: 12px; z-index: 10; background: var(--panel); padding: 8px 12px; }
+[hidden] { display: none !important; }
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-thumb { background: var(--edge); border-radius: 4px; }
+
+/* Frame: the side panel reads like TeamSpeak's server tree. */
+.app { display: grid; grid-template-columns: 248px 1fr; min-height: 100vh; }
+.app:has(> .rail[hidden]) { grid-template-columns: 1fr; }
+.rail { background: var(--rail); border-right: 1px solid var(--line); display: flex; flex-direction: column; padding-bottom: 8px; }
+.brand { display: flex; align-items: center; gap: 10px; padding: 12px 14px; background: var(--contrast); border-bottom: 1px solid var(--line); }
+.brand .avatar { width: 34px; height: 34px; font-size: 0.95rem; }
+.brand strong { display: block; color: var(--strong); font-weight: 600; }
+.brand small { display: block; font-size: 13px; color: var(--muted); }
+.rail .group { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: var(--soft); padding: 14px 14px 4px; }
+.rail .group::before { content: "▾"; font-size: 11px; color: var(--muted); }
+.rail a { display: flex; align-items: center; gap: 8px; text-decoration: none; height: 28px; padding: 0 12px 0 30px; margin: 0 6px; border-radius: var(--radius-s); color: var(--text); font-size: 14px; }
+.rail a::before { content: ""; width: 7px; height: 7px; border-radius: 50%; border: 1.5px solid var(--muted); flex: none; }
+.rail a:hover { background: var(--menu-hover); }
+.rail a[aria-current="page"] { background: var(--menu-bg); color: var(--menu-text); box-shadow: inset 0 0 0 1px var(--menu-edge); }
+.rail a[aria-current="page"]::before { background: var(--info); border-color: var(--info); }
+.rail .who { margin-top: auto; display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-top: 1px solid var(--line); font-size: 13px; color: var(--muted); }
+.rail .who strong { display: block; color: var(--strong); font-size: 14px; font-weight: 600; }
+.rail .who a { all: unset; cursor: pointer; color: var(--menu-text); text-decoration: underline; }
+.stage { min-width: 0; display: flex; flex-direction: column; }
+.topbar { display: flex; align-items: center; gap: 12px; height: 52px; padding: 0 20px; background: var(--contrast); border-bottom: 1px solid var(--line); }
+.topbar-end { margin-left: auto; }
+.main { padding: 24px 24px 64px; width: 100%; max-width: 1080px; }
+.main:focus { outline: none; }
+.only-mobile { display: none; }
+
+/* Round avatars with the green talking ring, as in the TS6 client. */
+.avatar { width: 28px; height: 28px; border-radius: 50%; display: inline-grid; place-items: center; flex: none; font-size: 12px; font-weight: 700; color: #fff; background: var(--avatar, #445277); box-shadow: 0 0 0 2px transparent; }
+.talking .avatar, .avatar.talking { box-shadow: 0 0 0 2px var(--talk); }
+
+/* Bot status in the top bar */
+.lamp { display: inline-flex; align-items: center; gap: 10px; font-weight: 600; color: var(--strong); }
+.lamp-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--muted); }
+.lamp[data-state="listening"] .lamp-dot { background: var(--talk); }
+.lamp[data-state="live"] .lamp-dot { background: var(--talk); box-shadow: 0 0 0 3px color-mix(in srgb, var(--talk) 35%, transparent); animation: talk 0.8s ease-in-out infinite alternate; }
+.lamp[data-state="down"] .lamp-dot { background: var(--bad); }
+@keyframes talk { to { box-shadow: 0 0 0 6px transparent; } }
+
+h1 { font-size: 24px; line-height: 28px; font-weight: 600; color: var(--strong); margin: 0 0 6px; }
+h2 { font-size: 16px; line-height: 19px; font-weight: 600; color: var(--strong); margin: 0 0 12px; }
+.lede { color: var(--muted); margin: 0 0 24px; max-width: 70ch; }
+.muted { color: var(--muted); }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius-l); padding: 16px 18px; }
+.stack > * + * { margin-top: 16px; }
+.split { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+.row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.row-end { display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap; }
+
+/* Controls, TS6 style: flat, small radius, blue primary. */
+.btn { border: 1px solid var(--edge); background: var(--panel-2); border-radius: var(--radius-s); padding: 6px 14px; min-height: 32px; cursor: pointer; font-weight: 600; font-size: 14px; }
+.btn:hover { border-color: var(--menu-text); }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.btn.primary:hover { filter: brightness(1.1); }
+.btn.danger { color: var(--bad); }
+.btn.ghost { background: transparent; border-color: transparent; }
+.btn.ghost:hover { border-color: var(--edge); }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.icon-btn { border: 1px solid var(--edge); background: transparent; border-radius: var(--radius-s); width: 34px; height: 34px; cursor: pointer; font-size: 1rem; color: var(--text); }
+input[type="text"], input[type="number"], input[type="password"], input[type="search"], select, textarea {
+  width: 100%; background: var(--contrast); border: 1px solid var(--edge); border-radius: var(--radius-s); padding: 7px 10px; font-size: 14px;
+}
+:root[data-theme="light"] :is(input[type="text"], input[type="number"], input[type="password"], input[type="search"], select, textarea) { background: var(--panel); }
+textarea { resize: vertical; min-height: 84px; }
+label { font-weight: 600; color: var(--strong); font-size: 14px; }
+.field { display: grid; gap: 4px; padding: 12px 0; border-top: 1px solid var(--line); }
+.field:first-of-type { border-top: 0; }
+.field .help { color: var(--muted); font-size: 13px; margin: 0; }
+.field.changed label::after { content: " (modifié)"; color: var(--info); font-weight: 450; }
+.switch { display: flex; gap: 10px; align-items: center; }
+.switch input { width: 18px; height: 18px; accent-color: var(--accent); }
+fieldset { border: 0; padding: 0; margin: 0; }
+legend { font-size: 16px; font-weight: 600; color: var(--strong); padding: 0; margin-bottom: 4px; }
+
+/* Conversation, shown like the TS6 chat. */
+.subtitles { display: flex; flex-direction: column; gap: 2px; max-height: 60vh; overflow-y: auto; padding-right: 6px; }
+.line { display: grid; grid-template-columns: 28px 1fr; gap: 0 10px; padding: 6px 8px; border-radius: var(--radius-s); }
+.line:hover { background: var(--menu-hover); }
+.line .avatar { grid-row: span 2; }
+.line .who { font-size: 14px; font-weight: 600; color: var(--strong); }
+.line .who time { font-weight: 450; color: var(--muted); font-size: 13px; margin-left: 8px; }
+.line .said { margin: 0; font-size: 14px; }
+.line.bot .who { color: var(--menu-text); }
+.empty { color: var(--muted); padding: 20px 0; }
+
+/* People in the channel, like client rows in the server tree */
+.people { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.people li { display: flex; gap: 10px; align-items: center; min-height: 36px; padding: 4px 8px; border-radius: var(--radius-s); font-size: 14px; }
+.people li:hover { background: var(--menu-hover); }
+.people li.talking { color: var(--strong); }
+.people .id { margin-left: auto; font-size: 13px; color: var(--muted); }
+
+/* Facts strip on the dashboard */
+.facts { display: flex; flex-wrap: wrap; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius-l); overflow: hidden; margin: 0 0 16px; }
+.facts div { flex: 1 1 150px; padding: 12px 16px; border-right: 1px solid var(--line); margin-right: -1px; }
+.facts dt { font-size: 13px; color: var(--muted); }
+.facts dd { margin: 2px 0 0; font-weight: 600; color: var(--strong); }
+.facts dd.good, .good { color: var(--talk); } .facts dd.bad, .bad { color: var(--bad); } .warn { color: var(--warn); }
+
+/* Lists and tables */
+.table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.table th { text-align: left; font-size: 13px; color: var(--muted); font-weight: 600; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+.table td { padding: 9px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+.chip { display: inline-block; padding: 1px 8px; border-radius: var(--radius-s); font-size: 13px; font-weight: 600; background: var(--panel-2); }
+.chip.done { color: var(--talk); } .chip.failed, .chip.cancelled, .chip.expired { color: var(--bad); } .chip.proposed { color: var(--info); }
+.quote { color: var(--muted); font-style: italic; }
+.kvs { display: grid; gap: 8px; }
+.kv { display: grid; grid-template-columns: minmax(8rem, 14rem) 1fr; gap: 8px; }
+
+/* Bars for statistics */
+.bars { display: grid; gap: 8px; }
+.bar { display: grid; grid-template-columns: 9rem 1fr 4.5rem; gap: 10px; align-items: center; font-size: 14px; }
+.bar .track { display: block; background: var(--contrast); border-radius: var(--radius-s); height: 8px; overflow: hidden; }
+.bar .fill { display: block; background: var(--accent); height: 100%; border-radius: var(--radius-s); min-width: 3px; }
+.bar .num { text-align: right; color: var(--muted); }
+.big { font-size: 28px; line-height: 32px; font-weight: 600; color: var(--strong); }
+
+/* Logs */
+.logs { font: 13px/1.5 var(--mono); background: var(--contrast); border: 1px solid var(--line); border-radius: var(--radius-l); padding: 12px; height: 60vh; overflow: auto; white-space: pre-wrap; word-break: break-word; }
+.logs .WARNING { color: var(--warn); } .logs .ERROR, .logs .CRITICAL { color: var(--bad); }
+
+/* Banner, toast, dialog */
+.banner { margin: 16px 24px 0; padding: 10px 14px; border-radius: var(--radius-l); border: 1px solid var(--menu-edge); background: var(--menu-bg); color: var(--strong); display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--panel-2); color: var(--strong); border: 1px solid var(--edge); border-left: 3px solid var(--talk); padding: 10px 16px; border-radius: var(--radius-l); font-weight: 600; max-width: calc(100vw - 32px); z-index: 20; }
+.toast.error { border-left-color: var(--bad); }
+.confirm { border: 1px solid var(--edge); border-radius: var(--radius-l); background: var(--panel-2); color: var(--text); padding: 18px; max-width: min(440px, calc(100vw - 32px)); }
+.confirm::backdrop { background: rgb(0 0 0 / 0.55); }
+
+/* Login */
+.login { max-width: 420px; margin: 8vh auto; }
+.code-input { font-size: 28px !important; letter-spacing: 0.4em; text-align: center; font-family: var(--mono) !important; }
+
+@media (max-width: 860px) {
+  .app { grid-template-columns: 1fr; }
+  .rail { position: fixed; inset: 0 auto 0 0; width: min(280px, 85vw); z-index: 15; transform: translateX(-100%); transition: transform 0.2s ease; }
+  .rail.open { transform: none; box-shadow: 0 0 0 100vw rgb(0 0 0 / 0.5); }
+  .only-mobile { display: inline-block; }
+  .split { grid-template-columns: 1fr !important; }
+  .topbar { padding: 0 12px; }
+  .main { padding: 18px 16px 56px; }
+  .banner { margin: 12px 16px 0; }
+  .bar { grid-template-columns: 6.5rem 1fr 3.6rem; }
+  .kv { grid-template-columns: 1fr; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
+  .table.responsive thead { display: none; }
+  .table.responsive tr { display: block; padding: 10px 0; border-bottom: 1px solid var(--line); }
+  .table.responsive td { display: block; border: 0; padding: 2px 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .lamp[data-state="live"] .lamp-dot { animation: none; }
+  .rail { transition: none; }
+}

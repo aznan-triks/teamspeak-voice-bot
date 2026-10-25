@@ -49,11 +49,17 @@ def to_speaker(cfg: dict, raw: dict) -> Speaker:
     )
 
 
-def serve(stream, transcribe, archive: Archive, loaded: list, cfg: dict, bot=None, router=None) -> None:
+def serve(stream, transcribe, archive: Archive, loaded: list, cfg: dict, bot=None, router=None, state=None) -> None:
     stt = cfg.get("stt", {})
     opt_out = set(cfg.get("privacy", {}).get("opt_out_uids", []))
     for header, pcm in read_frames(stream):
         raw = header.get("speaker", {})
+        if state is not None and header["event"] in ("clients", "speaking"):
+            state.on_event(header["event"], header, lambda r: to_speaker(cfg, r))
+            continue
+        if header["event"] == "text":
+            plugins.dispatch(loaded, "on_text", (to_speaker(cfg, raw), header.get("text", "")))
+            continue
         if header["event"] == "ready":
             me = to_speaker(cfg, raw)
             log.info("connected as %s (uid %s)", me.nickname, me.uid)
@@ -111,7 +117,8 @@ def stop_bridge(bridge: subprocess.Popen) -> None:
             bridge.kill()
 
 
-def run(cfg: dict) -> None:
+def run(cfg: dict, logs=None) -> None:
+    from .control import Control, State
     from .stt import Transcriber
     from .voice import Bot, Voice
 
@@ -119,7 +126,8 @@ def run(cfg: dict) -> None:
     archive = Archive(cfg.get("archive", {}).get("path", "data/archive.sqlite3"))
     loaded = plugins.load(cfg)
     bridge = spawn_bridge(cfg["teamspeak"])
-    bot = Bot(Voice(cfg.get("voice", {}), bridge.stdin), archive)
+    voice = Voice(cfg.get("voice", {}), bridge.stdin)
+    bot = Bot(voice, archive)
     plugins.dispatch(loaded, "attach", bot)
     router = None
     if cfg.get("llm", {}).get("enabled"):
@@ -127,8 +135,11 @@ def run(cfg: dict) -> None:
         from .router import Router
 
         router = Router(cfg["llm"], LLM(cfg["llm"]), bot, loaded)
+    state = State()
+    if cfg.get("web", {}).get("control", True):
+        Control(cfg, bot, voice, router, loaded, state, logs).start()
     try:
-        serve(bridge.stdout, transcribe, archive, loaded, cfg, bot, router)
+        serve(bridge.stdout, transcribe, archive, loaded, cfg, bot, router, state)
     finally:
         stop_bridge(bridge)
     sys.exit(bridge.returncode or 0)
@@ -152,14 +163,31 @@ def say(cfg: dict, text: str) -> None:
         stop_bridge(bridge)
 
 
+def merge(base: dict, extra: dict) -> dict:
+    """Settings saved by the site, on top of config.toml: tables are merged, other values replaced."""
+    out = dict(base)
+    for key, value in extra.items():
+        out[key] = merge(out[key], value) if isinstance(value, dict) and isinstance(out.get(key), dict) else value
+    return out
+
+
+def load_config(path: str) -> dict:
+    with open(path, "rb") as f:
+        cfg = tomllib.load(f)
+    settings = cfg.get("web", {}).get("settings_file", "data/settings.json")
+    if os.path.exists(settings):
+        with open(settings, encoding="utf-8") as f:
+            cfg = merge(cfg, json.load(f))
+    return cfg
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(prog="tsbot")
     parser.add_argument("command", nargs="?", default="run", choices=["run", "export", "say"])
     parser.add_argument("text", nargs="?", help="what to say (say command only)")
     parser.add_argument("--config", default=os.environ.get("TSBOT_CONFIG", "config.toml"))
     args = parser.parse_args()
-    with open(args.config, "rb") as f:
-        cfg = tomllib.load(f)
+    cfg = load_config(args.config)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     if args.command == "export":
         n = Archive(cfg.get("archive", {}).get("path", "data/archive.sqlite3")).export_jsonl(sys.stdout)
@@ -171,7 +199,11 @@ def main() -> None:
             parser.error("say needs a text, for example: python -m tsbot say \"Bonjour\"")
         say(cfg, args.text)
         return
-    run(cfg)
+    from .control import LogBuffer
+
+    logs = LogBuffer()
+    logging.getLogger().addHandler(logs)
+    run(cfg, logs)
 
 
 if __name__ == "__main__":

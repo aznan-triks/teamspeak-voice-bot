@@ -152,6 +152,16 @@ Test the voice without waiting for a conversation (with the bot stopped):
 docker compose run --rm tsbot python -m tsbot say "Bonjour tout le monde"
 ```
 
+## Manage the bot from a web page
+
+The bot comes with a management site, in French, styled like the TeamSpeak 6 client. Start it next to the bot (`docker compose up -d` starts both), then open `http://THIS-MACHINE:8095` from your home network.
+
+- **Log in** by picking your TeamSpeak nickname: the bot sends you a 6-digit code in a private TeamSpeak message. No password to remember.
+- **Everyone** sees the sentences the bot transcribed from their own voice, and the list of voice actions.
+- **Admins** (members of the server groups in `[web] admin_groups`, or the UIDs in `admin_uids`) also get: a live view of the channel, settings with explanations, identities and people not to transcribe, plugins, statistics, the bot's log, and a box to make the bot say something.
+- Settings changed on the site are saved in `data/settings.json`, on top of `config.toml`. The **Appliquer** button restarts the bot (about a minute) so it uses them.
+- The site is meant for your home network only: do not open port 8095 on your router.
+
 ## Everyday use
 
 ### Where things are saved

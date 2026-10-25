@@ -110,17 +110,24 @@ class Router:
         ])
 
     def _ask(self, now: float) -> dict | None:
+        started = time.time()
         try:
             reply = self.llm.chat(self.prompt, self.user_message())
         except Exception as error:
+            self._timed(started, False)
             self.failures += 1
             log.warning("LLM failure %d/%d: %s", self.failures, self.cfg.get("max_failures", 3), error)
             if self.failures >= self.cfg.get("max_failures", 3):
                 self._degrade(now)
             return None
+        self._timed(started, True)
         self.failures = 0
         log.info("LLM: %s", json.dumps(reply, ensure_ascii=False))
         return reply
+
+    def _timed(self, started: float, ok: bool) -> None:
+        """Saved for the statistics page: how long the LLM took."""
+        self.bot.archive.add_llm_call(int(started * 1000), int((time.time() - started) * 1000), ok)
 
     def _propose(self, reply: dict, t, now: float, asked: float) -> None:
         entry = self.actions.get(reply.get("action"))

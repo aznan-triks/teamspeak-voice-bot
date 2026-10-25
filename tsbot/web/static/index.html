@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Hector — gestion du bot</title>
+  <link rel="stylesheet" href="/app.css">
+  <script>
+    // Theme before first paint: no flash of the wrong colours.
+    try { const t = localStorage.getItem("theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) {}
+  </script>
+</head>
+<body>
+  <a class="skip" href="#main">Aller au contenu</a>
+  <div id="app" class="app">
+    <nav id="rail" class="rail" aria-label="Menu principal"></nav>
+    <div class="stage">
+      <header class="topbar">
+        <button id="menu-toggle" class="icon-btn only-mobile" aria-label="Ouvrir le menu" aria-expanded="false" aria-controls="rail">☰</button>
+        <div id="lamp" class="lamp" role="status" aria-live="polite"><span class="lamp-dot"></span><span class="lamp-text">Connexion…</span></div>
+        <div class="topbar-end">
+          <button id="theme-toggle" class="icon-btn" aria-label="Changer de thème">◐</button>
+        </div>
+      </header>
+      <div id="banner" class="banner" hidden></div>
+      <main id="main" class="main" tabindex="-1"></main>
+    </div>
+  </div>
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+  <dialog id="confirm" class="confirm">
+    <form method="dialog">
+      <p id="confirm-text"></p>
+      <div class="row-end">
+        <button value="cancel" class="btn ghost">Annuler</button>
+        <button value="ok" id="confirm-ok" class="btn primary">Confirmer</button>
+      </div>
+    </form>
+  </dialog>
+  <script src="/app.js"></script>
+</body>
+</html>
