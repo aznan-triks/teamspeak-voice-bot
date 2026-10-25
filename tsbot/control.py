@@ -109,6 +109,7 @@ class Control:
             text = str(body.get("text", "")).strip()
             if not text:
                 return 400, "text/plain", b"text is required"
+            log.info("asked from the site by %s", body.get("by", "?"))  # who made the bot say the next line
             return ok({"seconds": self.bot.say(text)})
         if method == "POST" and path == "/message":
             self.voice.send({"cmd": "message", "client_id": int(body["client_id"]), "text": str(body["text"]), "poke": bool(body.get("poke"))})

@@ -64,7 +64,8 @@ def route(app: App, method: str, path: str, query: dict, body: dict, user: dict 
     if method == "POST" and path == "/api/restart":
         return ok(app.bot("POST", "/restart"))
     if method == "POST" and path == "/api/say":
-        return ok(app.bot("POST", "/say", {"text": str(body.get("text", ""))}))
+        by = user.get("identity") or user.get("nickname") or user["uid"]
+        return ok(app.bot("POST", "/say", {"text": str(body.get("text", "")), "by": by}))
     if method == "GET" and path == "/api/voice":
         from urllib.parse import quote
 

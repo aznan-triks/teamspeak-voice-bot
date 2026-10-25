@@ -52,7 +52,9 @@ class ControlTest(unittest.TestCase):
         self.assertEqual((state["clients"][0]["identity"], state["speaking"][0]["identity"], state["llm"]), ("Alice", "Alice", None))
 
     def test_say_message_logs_and_unknown(self):
-        self.assertEqual(self.call("POST", "/say", body={"text": "Bonjour"}), (200, {"seconds": 1.5}))
+        with self.assertLogs("tsbot.control", "INFO") as said:
+            self.assertEqual(self.call("POST", "/say", body={"text": "Bonjour", "by": "Ilker"}), (200, {"seconds": 1.5}))
+        self.assertIn("by Ilker", said.output[0])  # who made the bot speak stays in the journal
         self.assertEqual(self.call("POST", "/say", body={"text": " "})[0], 400)
         self.call("POST", "/message", body={"client_id": 4, "text": "Code : 123456"})
         self.assertEqual(self.voice.sent, [{"cmd": "message", "client_id": 4, "text": "Code : 123456", "poke": False}])
