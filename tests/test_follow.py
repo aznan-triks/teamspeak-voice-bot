@@ -46,8 +46,18 @@ class FollowTest(unittest.TestCase):
             self.f.decide(clients, [BOT1], 30)  # still not there 20 s later: password or rights
         self.assertEqual(self.f.decide(clients, [BOT1], 100)["move"], {})
 
+    def test_waits_for_the_second_bot_to_be_connected(self):
+        clients = people(("Ilker", 5), ("Cotty", 7), bots=[5]) + [{"uid": "new=", "identity": "Invité", "channel_id": 1}]
+        self.f.decide(clients, [BOT1, None], 0)
+        self.assertEqual(self.f.decide(clients, [BOT1, None], 30)["move"], {})  # its identity is not known yet
+
     def test_nobody_known_online_stays_put(self):
         self.assertEqual(self.f.decide(people((None, 5), bots=[1]), [BOT1], 100)["move"], {})
+
+    def test_second_bot_leaves_when_everyone_is_gone(self):
+        self.f.decide(people(bots=[5, 7]), [BOT1, BOT2], 0)
+        self.assertFalse(self.f.decide(people(bots=[5, 7]), [BOT1, BOT2], 30)["stop"])
+        self.assertTrue(self.f.decide(people(bots=[5, 7]), [BOT1, BOT2], 60)["stop"])
 
 
 if __name__ == "__main__":

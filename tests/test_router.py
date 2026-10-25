@@ -144,10 +144,12 @@ class RouterTest(unittest.TestCase):
         self.setup(llm)
         self.router.cfg["follow_up_s"] = 30
         self.hear(ALICE, "jarvis ça va ?", now=1)
+        self.assertIn("APPELÉ PAR SON NOM : oui", self.router.user_message())  # called by name: it must answer
         self.hear(BOB, "Alice tu lances ?", now=5)  # someone else chatting: left alone
         self.assertEqual(llm.calls, 1)
         self.hear(ALICE, "et toi t'en penses quoi", now=10)  # the same person, within 30 s: the LLM decides
         self.assertIn("CONVERSATION EN COURS : oui", self.router.user_message())
+        self.assertIn("APPELÉ PAR SON NOM : non", self.router.user_message())
         self.hear(ALICE, "bon on lance la partie", now=100)  # long after: not sent to the LLM
         self.assertEqual(llm.calls, 2)
 

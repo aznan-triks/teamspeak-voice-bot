@@ -22,6 +22,8 @@ class Follower:
     def decide(self, clients: list, bot_uids: list, now: float) -> dict:
         """`bot_uids[i]`: UID of seat i (seat 0 always runs; None while a seat is not connected yet).
         Returns {"move": {seat: channel}, "start": bool, "stop": bool}."""
+        if None in bot_uids:
+            return {"move": {}, "start": False, "stop": False}  # a bot still connecting would count as a player
         where = {c.get("uid"): c.get("channel_id") for c in clients}
         at = [where.get(uid) for uid in bot_uids]
         self._check_moves(at, now)
@@ -32,13 +34,15 @@ class Follower:
         if wanted != self.wanted:
             self.wanted, self.since = wanted, now
         out = {"move": {}, "start": False, "stop": False}
-        if not wanted or now - self.since < self.cfg.get("move_after_s", 10):
-            return out  # nobody known online, or people still moving around: stay put
+        if now - self.since < self.cfg.get("move_after_s", 10):
+            return out  # people still moving around: stay put
         second = len(bot_uids) > 1
+        if second and len(wanted) < 2 and (at[1] in wanted or now - self.since >= self.cfg.get("stop_after_s", 60)):
+            out["stop"] = True  # no longer needed (at once if it sits where the first bot must go)
+        if not wanted:
+            return out  # nobody known online: the first bot stays where it is
         if len(wanted) > 1 and not second:
             out["start"] = True
-        if second and len(wanted) < 2 and (at[1] == wanted[0] or now - self.since >= self.cfg.get("stop_after_s", 60)):
-            out["stop"] = True  # no longer needed (at once if it sits where the first bot must go)
         targets = [ch for ch in wanted if ch not in at[: len(wanted)]]
         for seat, channel in enumerate(at[: len(wanted)]):
             if channel in wanted or channel is None or not targets or (out["stop"] and seat == 1):

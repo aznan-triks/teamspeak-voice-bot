@@ -95,7 +95,7 @@ class Router:
         if t.speaker.uid == self.partner and t.started_ms < self.replied_ms:
             return
         same = self.pending is not None and self.pending["action"].requested_by.uid == t.speaker.uid
-        addressed = bool(self.wake.search(t.text))
+        addressed = self.addressed = bool(self.wake.search(t.text))
         # A plain "oui"/"non" settles it at once; "Non Hector, plutôt deux points" goes to the LLM.
         if same and not addressed and YES.match(t.text):
             return self._finish(True)
@@ -151,6 +151,7 @@ class Router:
             "TRANSCRIPTION :", *self.bot.window,
             # Last: a line that changes after the transcription keeps the LLM's cache of what comes before.
             f"CONVERSATION EN COURS : {'oui' if getattr(self, 'following', False) else 'non'}",
+            f"APPELÉ PAR SON NOM : {'oui' if getattr(self, 'addressed', False) else 'non'}",
         ])
 
     def _ask(self, now: float) -> dict | None:
