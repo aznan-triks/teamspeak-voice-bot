@@ -53,7 +53,13 @@ class ActionEvent:
 def load(cfg: dict) -> list:
     """Create `module.Plugin(config)` for every module listed in [plugins].enabled."""
     section = cfg.get("plugins", {})
-    return [importlib.import_module(name).Plugin(section.get(name, {})) for name in section.get("enabled", [])]
+    loaded = []
+    for name in section.get("enabled", []):
+        try:  # a plugin that cannot start (its application is down...) must not stop the bot
+            loaded.append(importlib.import_module(name).Plugin(section.get(name, {})))
+        except Exception:
+            log.exception("plugin %s could not start: the bot runs without it", name)
+    return loaded
 
 
 def dispatch(plugins: list, hook: str, event) -> None:

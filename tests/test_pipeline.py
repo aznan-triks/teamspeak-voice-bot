@@ -3,6 +3,7 @@ import io
 import json
 import unittest
 
+from tsbot import plugins
 from tsbot.__main__ import resolve_identity, serve
 from tsbot.archive import Archive
 
@@ -63,6 +64,12 @@ class PipelineTest(unittest.TestCase):
         rows = [json.loads(line) for line in out.getvalue().splitlines()]
         self.assertEqual(rows[1]["server_groups"], ["Guest", "Modo"])
         self.assertEqual((rows[0]["duration_ms"], rows[0]["identity"], rows[0]["text"]), (1000, "Alice", "bonjour"))
+
+    def test_plugin_that_cannot_start_is_skipped(self):
+        cfg = {"plugins": {"enabled": ["no_such_plugin", "tsbot.plugins_examples.scoreboard"]}}
+        with self.assertLogs("tsbot.plugins", "ERROR"):
+            loaded = plugins.load(cfg)
+        self.assertEqual([type(p).__module__ for p in loaded], ["tsbot.plugins_examples.scoreboard"])
 
     def test_truncated_frame_raises(self):
         with self.assertRaises(EOFError):
