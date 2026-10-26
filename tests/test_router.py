@@ -77,6 +77,14 @@ class WindowTest(unittest.TestCase):
         bot.heard(utterance(BOB, "phrase 30"))
         self.assertEqual((len(bot.window), bot.window[0], bot.window[-1]), (20, "[Bob] phrase 11", "[Bob] phrase 30"))
 
+    def test_people_talking_over_each_other_are_marked(self):
+        # Lines arrive when each person stops: without a mark, talking over each other reads like taking turns.
+        bot = Bot(None, Archive(":memory:"))
+        bot.heard(Transcription(1, BOB, 1_000, 2_000, "tu lances ?"))       # 1.0 → 3.0 s
+        bot.heard(Transcription(2, ALICE, 500, 6_000, "j'ai une longue histoire"))  # 0.5 → 6.5 s: over Bob
+        bot.heard(Transcription(3, BOB, 10_000, 1_000, "ok"))              # after everyone
+        self.assertEqual(bot.window, ["[Bob] tu lances ?", "[Alice, en même temps que Bob] j'ai une longue histoire", "[Bob] ok"])
+
 
 class RouterTest(unittest.TestCase):
     def setup(self, llm, prompt_file="prompts/system_fr.txt"):
@@ -249,6 +257,11 @@ class RouterTest(unittest.TestCase):
         self.setup(FakeLLM())
         router = Router({"wake_words": ["jarvis"], "personality": "Tu es drôle."}, FakeLLM(), self.bot, [])
         self.assertTrue(router.prompt.endswith("PERSONNALITÉ :\nTu es drôle.\n"))
+
+    def test_the_bot_knows_how_it_is_built(self):
+        self.setup(FakeLLM())
+        router = Router({"wake_words": ["jarvis"], "about": "transcription canary, réponses deepseek"}, FakeLLM(), self.bot, [])
+        self.assertIn("min, transcription canary, réponses deepseek", router.user_message())
 
     def test_correction_with_wake_word_goes_to_the_llm(self):
         llm = FakeLLM(PROPOSE, dict(PROPOSE, args={"player": "Alice", "points": 2}, confirm_text="Deux points pour Alice ?"))

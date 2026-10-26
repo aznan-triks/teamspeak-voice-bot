@@ -175,7 +175,7 @@ class Router:
             "EN ATTENTE :", json.dumps(pending, ensure_ascii=False),
             "TRANSCRIPTION :", *self.bot.window,
             # Last: a line that changes after the transcription keeps the LLM's cache of what comes before.
-            f"BOT : en ligne depuis {int((time.time() - self.started_at) // 60)} min",
+            f"BOT : en ligne depuis {int((time.time() - self.started_at) // 60)} min" + (f", {self.cfg['about']}" if self.cfg.get("about") else ""),
             f"CONVERSATION EN COURS : {'oui' if getattr(self, 'following', False) else 'non'}",
             f"APPELÉ PAR SON NOM : {'oui' if getattr(self, 'addressed', False) else 'non'}",
             *([note] if note else []),

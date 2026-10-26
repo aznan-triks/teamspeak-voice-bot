@@ -191,7 +191,12 @@ def run(cfg: dict, logs=None) -> None:
         bridge = spawn_bridge(ts)
         voice = Voice(cfg.get("voice", {}), bridge.stdin)
         bot = Bot(voice, archive)
-        return bridge, voice, bot, Router(cfg["llm"], llm, bot, loaded) if llm else None
+        # Asked live "which model do you use for transcription?": it did not know how it is built.
+        stt = cfg.get("stt", {})
+        about = (f"transcription {stt.get('model', 'nemo-canary-1b-v2')}"
+                 + (f" (comparée à {stt['compare_model']})" if stt.get("compare_model") else "")
+                 + f", réponses {cfg['llm'].get('model', '?')}")
+        return bridge, voice, bot, Router({**cfg["llm"], "about": about}, llm, bot, loaded) if llm else None
 
     bridge, voice, bot, router = seat(cfg["teamspeak"])
     plugins.dispatch(loaded, "attach", bot)

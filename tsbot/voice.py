@@ -117,9 +117,15 @@ class Bot:
         self.voice, self.archive, self.me = voice, archive, None
         self.window, self.size = [], window
         self.channel_id, self.listeners = None, []  # who can hear the bot right now
+        self.spans: list = []  # (start ms, end ms, name) of the last lines, to see who talked over whom
 
     def heard(self, t) -> None:
-        self._remember(f"[{t.speaker.identity or t.speaker.nickname}] {t.text}")
+        # A line is written when its speaker stops: people talking over each other would read like turns.
+        name = t.speaker.identity or t.speaker.nickname
+        end = t.started_ms + t.duration_ms
+        over = list(dict.fromkeys(n for s, e, n in self.spans if n != name and s < end and t.started_ms < e))
+        self.spans = (self.spans + [(t.started_ms, end, name)])[-6:]
+        self._remember(f"[{name}" + (f", en même temps que {', '.join(over)}" if over else "") + f"] {t.text}")
 
     def _remember(self, line: str) -> None:
         self.window.append(line)
@@ -139,6 +145,8 @@ class Bot:
             log.exception("the bot could not speak: %r", what)  # never stop listening because of the voice
             return 0.0
         name = self.me.nickname if self.me else "bot"
+        now = int(time.time() * 1000)
+        self.spans = (self.spans + [(now, now + int(seconds * 1000), name)])[-6:]
         self._remember(f"[{name}] {text}")
         if self.me:
             self.archive.add(
