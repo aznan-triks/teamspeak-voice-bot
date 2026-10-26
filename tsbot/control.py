@@ -18,6 +18,9 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
+from . import SPOKEN
+from .plugins import WebRequest
+
 log = logging.getLogger(__name__)
 
 
@@ -31,6 +34,8 @@ class LogBuffer(logging.Handler):
         self.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s"))
 
     def emit(self, record) -> None:
+        if str(record.msg).startswith(SPOKEN):
+            return  # what people said: only for those who were in the channel, never in the site's log page
         self.lines.append({"id": self.next_id, "level": record.levelname, "text": self.format(record)})
         self.next_id += 1
 
@@ -47,6 +52,7 @@ class State:
         self.speaking: deque = deque(maxlen=50)
 
     on_clients = None  # set when the bot follows people: called with each new client list
+    channels = None  # the channels the bots are in (two when players split up), for "can this person hear it?"
 
     def on_event(self, event: str, header: dict, to_speaker) -> None:
         if event == "clients":
@@ -91,6 +97,7 @@ class Control:
         return {
             "started_ms": self.state.started_ms,
             "me": asdict(me) if me else None,
+            "bot_channels": self.state.channels() if self.state.channels else [self.bot.channel_id],
             "clients": self.state.clients,
             "speaking": list(self.state.speaking),
             "llm": None if self.router is None else {"degraded": self.router.degraded, "pending": bool(self.router.pending)},
@@ -121,6 +128,25 @@ class Control:
         if method == "POST" and path == "/message":
             self.voice.send({"cmd": "message", "client_id": int(body["client_id"]), "text": str(body["text"]), "poke": bool(body.get("poke"))})
             return ok({"sent": True})
+        if method == "GET" and path == "/plugins":
+            actions = self.router.actions if self.router else {}
+            return ok([{"name": type(p).__module__, "web": hasattr(p, "web"),
+                        "actions": [n for n, (owner, _) in actions.items() if owner is p]} for p in self.loaded])
+        if method == "POST" and path == "/plugin":
+            # The site's door to any plugin; the answer is always 200, its own status inside.
+            plugin = next((p for p in self.loaded if type(p).__module__ == body.get("name") and hasattr(p, "web")), None)
+            if plugin is None:
+                return ok({"status": 404, "error": "no such plugin"})
+            request = WebRequest(str(body.get("method", "GET")), str(body.get("path", "")), body.get("query") or {},
+                                 body.get("body") or {}, body.get("user") or {})
+            try:
+                return ok({"status": 200, "data": plugin.web(request)})
+            except (PermissionError, LookupError, ValueError) as error:
+                status = 403 if isinstance(error, PermissionError) else 404 if isinstance(error, LookupError) else 400
+                return ok({"status": status, "error": str(error)})
+            except Exception as error:
+                log.exception("plugin %s failed in web", body.get("name"))
+                return ok({"status": 500, "error": str(error)})
         if method == "POST" and path == "/restart":
             # The bot quits cleanly; Restart=always (systemd) or restart: unless-stopped (compose) starts it again.
             threading.Timer(0.5, os.kill, (os.getpid(), signal.SIGTERM)).start()

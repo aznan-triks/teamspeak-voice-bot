@@ -344,5 +344,6 @@
   "field.web.admin_groups.label": "Grades administrateurs du site",
   "field.web.admin_groups.help": "Grades TeamSpeak dont les membres administrent ce site. Un par ligne.",
   "field.web.admin_uids.label": "Administrateurs supplémentaires (UID)",
-  "field.web.admin_uids.help": "Identifiants TeamSpeak administrateurs même sans le grade. Un par ligne."
+  "field.web.admin_uids.help": "Identifiants TeamSpeak administrateurs même sans le grade. Un par ligne.",
+  "error.plugin": "Le module a refusé : {error}"
 }

@@ -10,6 +10,8 @@ from pathlib import Path
 from . import plugins
 from .plugins import ActionEvent, ProposedAction
 
+from . import SPOKEN
+
 log = logging.getLogger(__name__)
 # "Yes" and "no" are recognised without the LLM: faster, and it still works when the LLM is slow.
 YES = re.compile(r"^\W*(oui|ouais|yes|vas-y|valide|je valide|confirme|d'accord|ok|go)\b", re.I)
@@ -133,7 +135,7 @@ class Router:
             me = f"[{self.bot.me.nickname}] " if self.bot.me else "[bot] "
             mine = [line[len(me):] for line in self.bot.window if line.startswith(me)][-4:]
             if any(repeats(text, s) for s in mine):
-                log.info("repeated answer: %s", text[:80])  # small models say the same thing again
+                log.info(SPOKEN + "repeated answer: %s", text[:80])  # small models say the same thing again
                 # Called by name, silence is worse (live: "botop, j'ai pas compris" got nothing four times in a row):
                 # asked once more for something new, and said even if repeated (it was asked to repeat).
                 again = self._ask(now, self.cfg.get("repeat_note", "RÉPÉTITION : tu viens déjà de dire ça. Réponds à la "
@@ -192,7 +194,7 @@ class Router:
             return None
         self._timed(started, True)
         self.failures = 0
-        log.info("LLM: %s", json.dumps(reply, ensure_ascii=False))
+        log.info(SPOKEN + "LLM: %s", json.dumps(reply, ensure_ascii=False))
         return reply
 
     def _timed(self, started: float, ok: bool) -> None:
@@ -207,7 +209,7 @@ class Router:
         # "Ilker ... ?" read out for a point to someone else).
         if (entry is None or not valid(args, entry[1].params) or not isinstance(confirm, str) or not confirm.strip()
                 or any(isinstance(v, str) and v.lower() not in confirm.lower() for v in args.values())):
-            log.warning("invalid proposal ignored: %s", reply)
+            log.warning(SPOKEN + "invalid proposal ignored: %s", reply)
             if spoken_to:
                 self.bot.say("invalid")
             return

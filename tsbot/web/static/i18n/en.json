@@ -344,5 +344,6 @@
   "field.web.admin_groups.label": "Site Administrator Server Groups",
   "field.web.admin_groups.help": "TeamSpeak server groups whose members can administer this site. One per line.",
   "field.web.admin_uids.label": "Additional Administrator UIDs",
-  "field.web.admin_uids.help": "TeamSpeak client UIDs granted admin rights regardless of server groups. One per line."
+  "field.web.admin_uids.help": "TeamSpeak client UIDs granted admin rights regardless of server groups. One per line.",
+  "error.plugin": "The plugin refused: {error}"
 }

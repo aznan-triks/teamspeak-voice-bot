@@ -322,12 +322,12 @@ class App:
             state = self.bot("GET", "/state")
         except HttpError:
             return {"hearing": False, "reason": tr("presence.bot_offline", lang), "bot_online": False, "talking": False}
-        bot_channel = (state.get("me") or {}).get("channel_id")
+        channels = state.get("bot_channels") or []  # the bot's channel; two when it follows a split group
         me = next((c for c in state["clients"] if c.get("uid") == uid), None)
         talking = any(time.time() * 1000 - x.get("ms", 0) < 3000 for x in state.get("speaking", []))
         if me is None:
             return {"hearing": False, "reason": tr("presence.user_offline", lang), "bot_online": True, "talking": talking}
-        if me.get("channel_id") != bot_channel:
+        if me.get("channel_id") not in channels:
             return {"hearing": False, "reason": tr("presence.wrong_channel", lang, name=self.bot_name()), "bot_online": True, "talking": talking}
         if not me.get("hearing"):
             return {"hearing": False, "reason": tr("presence.deaf", lang), "bot_online": True, "talking": talking}
@@ -601,5 +601,6 @@ class App:
             ["journalctl", "--user", "-u", unit, "-n", str(lines), "-o", "short-iso", "--no-pager"],
             capture_output=True, text=True, timeout=20,
         )
-        noise = ("RSA puzzle", "Unknown argument", "tsproto::resend", "image pull", "container ")
+        # "[spoken]": what people said, only for those who were in the channel (admins included).
+        noise = ("[spoken]", "RSA puzzle", "Unknown argument", "tsproto::resend", "image pull", "container ")
         return [line for line in r.stdout.splitlines() if not any(n in line for n in noise)]

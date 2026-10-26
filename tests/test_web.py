@@ -25,7 +25,9 @@ class FakeBot:
         path = req.full_url.split("8096", 1)[1]
         body = json.loads(req.data) if req.data else {}
         if path == "/state":
-            data = {"started_ms": 0, "me": {"client_id": 1, "channel_id": 7},
+            # Same shape as the real bot: its channel is in bot_channels ("me" has none; live, that showed
+            # "you are not in the channel" to people who were).
+            data = {"started_ms": 0, "me": {"client_id": 1}, "bot_channels": [7],
                     "clients": [{"client_id": 1, "uid": "bot=", "channel_id": 7}, ADMIN, MEMBER],
                     "speaking": []}
         elif path == "/message":
@@ -34,6 +36,8 @@ class FakeBot:
         elif path == "/restart":
             self.restarts += 1
             data = {"restarting": True}
+        elif getattr(self, "control", None):  # the real control API, with test plugins
+            return io.BytesIO(self.control.handle(req.get_method(), path, {}, body)[2])
         else:
             data = {}
         return io.BytesIO(json.dumps(data).encode())
@@ -188,6 +192,36 @@ class WebTest(unittest.TestCase):
         _TRANSLATIONS.setdefault("en", {}).pop("test_fallback_key", None)
         self.assertEqual(tr("test_fallback_key", "en"), "Valeur en français")
         _TRANSLATIONS["fr"].pop("test_fallback_key", None)
+
+    def test_any_plugin_gets_its_own_api_on_the_site(self):
+        from tsbot.control import Control, LogBuffer, State
+
+        class Notes:  # a plugin with a web API: everyone reads, admins write
+            notes = ["gg"]
+
+            def web(self, req):
+                if req.method == "GET" and req.path == "notes":
+                    return {"notes": self.notes, "asked_by": req.user["identity"]}
+                if req.method == "POST" and req.path == "notes":
+                    if not req.user["admin"]:
+                        raise PermissionError("admins only")
+                    self.notes.append(str(req.body["text"]))
+                    return {"notes": self.notes}
+                raise LookupError(req.path)
+
+        class Quiet:  # no web API
+            pass
+
+        self.fake.control = Control({}, None, None, None, [Notes(), Quiet()], State(), LogBuffer())
+        admin, member = self.login(ADMIN), self.login(MEMBER)
+        listed = self.call(member, "GET", "/api/plugin")
+        self.assertEqual([(p["name"], p["web"]) for p in listed], [(__name__, True), (__name__, False)])
+        self.assertEqual(self.call(member, "GET", f"/api/plugin/{__name__}/notes"), {"notes": ["gg"], "asked_by": "Bob"})
+        self.assertIn("admins only", self.call(member, "POST", f"/api/plugin/{__name__}/notes", {"text": "x"})["error"])
+        self.assertEqual(self.call(admin, "POST", f"/api/plugin/{__name__}/notes", {"text": "ez"}), {"notes": ["gg", "ez"]})
+        self.assertIn("error", self.call(member, "GET", f"/api/plugin/{__name__}/nope"))
+        self.assertIn("error", self.call(member, "GET", "/api/plugin/no.such.plugin/x"))
+        self.assertEqual(self.call(None, "GET", f"/api/plugin/{__name__}/notes"), {"error": "Connecte-toi d'abord."})
 
     def test_member_can_opt_out_but_not_rename_or_make_the_bot_speak(self):
         member = self.login(MEMBER)

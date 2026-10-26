@@ -18,6 +18,8 @@ import time
 import unicodedata
 import wave
 
+from . import SPOKEN
+
 log = logging.getLogger(__name__)
 GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/openai"
 
@@ -169,7 +171,7 @@ class Transcriber:
             except Exception:
                 log.exception("compare: %s failed", name)
                 continue
-            log.info("compare [%s] %s: %s | %s: %s  (%d ms)", who, self.cfg.get("model", "nemo-canary-1b-v2"), text, name,
+            log.info(SPOKEN + "compare [%s] %s: %s | %s: %s  (%d ms)", who, self.cfg.get("model", "nemo-canary-1b-v2"), text, name,
                      fix_names(other.strip(), self.names()), (time.monotonic() - started) * 1000)
 
     def transcribe(self, pcm: bytes) -> str:

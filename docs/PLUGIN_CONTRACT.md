@@ -57,6 +57,30 @@ How an action flows:
 
 What `execute()` is responsible for: checking that the person may do this, making the call idempotent (a repeated confirmation must not count twice), calling the application's API, and never changing data from `on_transcription`. Test plugins against a fake server, never against real data.
 
+## Site
+
+A plugin can offer its own API on the management site, with no change to the site or the core.
+
+```python
+class Plugin:
+    def web(self, req: WebRequest) -> dict | list: ...    # its answer is sent back as JSON
+```
+
+```python
+WebRequest(method: str,   # GET | POST
+           path: str,     # what follows /api/plugin/<module>/
+           query: dict,   # {name: [values]}
+           body: dict,    # the JSON body of a POST
+           user: dict)    # who is logged in: {"uid", "nickname", "identity", "admin"}
+```
+
+- `GET /api/plugin` lists the loaded plugins: `[{"name", "web", "actions"}]`.
+- `GET|POST /api/plugin/<module>/<path>` reaches `web()`. Only logged-in people get there; the plugin decides the rest from `req.user` (an admin, a known `identity`...).
+- Refuse with `PermissionError` (403), `LookupError` (404) or `ValueError` (400): the site shows the message. Any other exception is logged and gives a 500.
+- `web()` runs in the control API's own thread, not the main one: it does not delay transcription, but it must be safe to run alongside the other hooks.
+
+Example: `tsbot/plugins_examples/scoreboard.py` answers `GET /api/plugin/tsbot.plugins_examples.scoreboard/scores`.
+
 ## Rules for every hook
 
 - Hooks run one at a time on the main thread: a slow hook delays the next transcription. Do long input/output (HTTP calls…) in your own thread, except in `execute()`, whose answer the bot waits for.

@@ -11,6 +11,8 @@ import threading
 import time
 from pathlib import Path
 
+from . import SPOKEN
+
 log = logging.getLogger(__name__)
 AUDIO_FILES = (".wav", ".ogg", ".opus", ".mp3", ".flac")
 SEND_RATE = 48_000  # what the bridge expects: 16-bit PCM, 48 kHz, mono
@@ -144,5 +146,5 @@ class Bot:
                 uid=self.me.uid, nickname=self.me.nickname, identity=None, server_groups=self.me.server_groups,
                 channel_id=self.channel_id, text=text, stt_ms=None, listeners=self.listeners,
             )
-        log.info("[%s] %s", name, text)
+        log.info(SPOKEN + "[%s] %s", name, text)
         return seconds

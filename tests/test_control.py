@@ -50,6 +50,20 @@ class ControlTest(unittest.TestCase):
         status, state = self.call("GET", "/state")
         self.assertEqual(status, 200)
         self.assertEqual((state["clients"][0]["identity"], state["speaking"][0]["identity"], state["llm"]), ("Alice", "Alice", None))
+        self.bot.channel_id = 7
+        self.assertEqual(self.call("GET", "/state")[1]["bot_channels"], [7])
+        self.state.channels = lambda: [7, 9]  # following a split group: two bots
+        self.assertEqual(self.call("GET", "/state")[1]["bot_channels"], [7, 9])
+
+    def test_what_people_said_never_reaches_the_site_log(self):
+        from tsbot import SPOKEN
+
+        logger = logging.getLogger("tsbot.test_spoken")
+        logger.addHandler(self.logs)
+        logger.setLevel(logging.INFO)
+        logger.info(SPOKEN + "[%s] %s", "Ilker", "secret")
+        logger.info("connected as %s", "TopTop")
+        self.assertEqual([line["text"].split(": ", 1)[1] for line in self.logs.after(0)], ["connected as TopTop"])
 
     def test_say_message_logs_and_unknown(self):
         with self.assertLogs("tsbot.control", "INFO") as said:

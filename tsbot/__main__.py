@@ -18,6 +18,8 @@ from . import plugins
 from .archive import Archive
 from .plugins import Speaker, Transcription
 
+from . import SPOKEN
+
 log = logging.getLogger("tsbot")
 BYTES_PER_MS = 32  # 16-bit PCM, 16 kHz, mono
 
@@ -123,7 +125,7 @@ def heard(header: dict, raw: dict, pcm: bytes, duration_ms: int, transcribe, arc
     )
     if bot:
         bot.listeners = header.get("listeners", bot.listeners)
-    log.info("[%s] %s  (%d ms audio, %d ms STT)", speaker.identity or speaker.nickname, text, duration_ms, stt_ms)
+    log.info(SPOKEN + "[%s] %s  (%d ms audio, %d ms STT)", speaker.identity or speaker.nickname, text, duration_ms, stt_ms)
     if hasattr(transcribe, "compare"):
         transcribe.compare(pcm, speaker.identity or speaker.nickname, text)
     t = Transcription(archive_id, speaker, header.get("started_ms", 0), duration_ms, text)
@@ -216,6 +218,7 @@ def run(cfg: dict, logs=None) -> None:
                     seats[i][1].send({"cmd": "move", "channel_id": channel})
 
         state.on_clients = on_clients
+        state.channels = lambda: [b.channel_id for _, _, b, _ in seats]
 
     def names() -> list:
         """What speech-to-text should expect: known people, connected nicknames, players, the wake words."""

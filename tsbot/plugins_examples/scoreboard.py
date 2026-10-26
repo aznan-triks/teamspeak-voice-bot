@@ -35,6 +35,12 @@ class Plugin:
     def context(self):
         return {"joueurs": self.players, "jeux": self.games}
 
+    def web(self, req):
+        """The site's door to this plugin: GET /api/plugin/tsbot.plugins_examples.scoreboard/scores."""
+        if req.method == "GET" and req.path == "scores":
+            return json.loads(self.path.read_text(encoding="utf-8")) if self.path.exists() else {}
+        raise LookupError(req.path)
+
     def execute(self, action):
         a = action.args
         scores = json.loads(self.path.read_text(encoding="utf-8")) if self.path.exists() else {}

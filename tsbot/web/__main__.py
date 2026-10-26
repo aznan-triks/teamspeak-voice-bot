@@ -87,6 +87,17 @@ def route(
         return ok(app.actions(user["uid"], user["admin"], int(one("before_id", "0")), int(one("limit", "50"))))
     if method == "GET" and path == "/api/stats":
         return ok(app.stats(int(one("days", "30"))))
+    # Any plugin's own API (docs/PLUGIN_CONTRACT.md, "Site"): the plugin checks who may do what.
+    if method == "GET" and path == "/api/plugin":
+        return ok(app.bot("GET", "/plugins", lang=lang))
+    if path.startswith("/api/plugin/"):
+        name, _, rest = path[len("/api/plugin/"):].partition("/")
+        who = {k: user.get(k) for k in ("uid", "nickname", "identity", "admin")}
+        reply = app.bot("POST", "/plugin", {"name": name, "method": method, "path": rest, "query": query,
+                                            "body": body, "user": who}, lang=lang)
+        if reply["status"] != 200:
+            raise err(reply["status"], "error.plugin", error=reply.get("error", ""))
+        return ok(reply["data"])
     if not user["admin"]:
         raise err(403, "error.admin_only")
 

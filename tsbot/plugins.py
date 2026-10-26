@@ -50,6 +50,17 @@ class ActionEvent:
     result: str | None = None
 
 
+@dataclass(frozen=True)
+class WebRequest:
+    """A call from the management site: /api/plugin/<module>/<path>. The plugin decides who may do what;
+    raise PermissionError (403), LookupError (404) or ValueError (400) to refuse."""
+    method: str  # GET | POST
+    path: str    # what follows /api/plugin/<module>/
+    query: dict  # {name: [values]}
+    body: dict   # the JSON body of a POST
+    user: dict   # who is logged in on the site: {"uid", "nickname", "identity", "admin"}
+
+
 def load(cfg: dict) -> list:
     """Create `module.Plugin(config)` for every module listed in [plugins].enabled."""
     section = cfg.get("plugins", {})
