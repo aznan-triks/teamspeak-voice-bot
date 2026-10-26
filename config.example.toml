@@ -24,7 +24,7 @@ laugh_threshold_pct = 20  # lower = more laughs caught, more false ones
 # fails (quota, network), the local model writes the sentence.
 # engine = "gemini"
 # gemini_model = "gemini-3.5-flash-lite"   # measured 1.0-1.4 s a sentence
-# gemini_min_ms = 1200
+# gemini_min_ms = 900
 # When Gemini stops answering (quota, overload), the next one is used, then the local model. Same key if none is given.
 # gemini_fallbacks = [{ model = "gemini-3-flash-preview" }, { model = "gemini-flash-lite-latest" }]
 # To judge another model on real voices: it transcribes the same sounds in the background and the log shows both texts

@@ -80,7 +80,7 @@ class GeminiTest(unittest.TestCase):
         if importlib.util.find_spec("numpy") is None:
             self.skipTest("numpy (installed in the Docker image) is needed for the local model")
         sent = len(FakeGemini.requests)
-        self.assertEqual((self.stt(b"\x00\x01" * 16000), self.stt.engine), ("local", "nemo-canary-1b-v2"))  # 1 s
+        self.assertEqual((self.stt(b"\x00\x01" * 12800), self.stt.engine), ("local", "nemo-canary-1b-v2"))  # 0.8 s
         self.assertEqual(len(FakeGemini.requests), sent)
 
     def test_names_go_with_the_audio_and_failures_fall_back(self):

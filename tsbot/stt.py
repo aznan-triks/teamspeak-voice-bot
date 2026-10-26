@@ -136,12 +136,9 @@ class Transcriber:
         step = 10 * 16000  # CED-mini takes 10 s at most (12 s failed live and stopped the bot)
         try:
             # AudioSet 16-21: laughter, baby laughter, giggle, snicker, belly laugh, chuckle. Measured: real laughs
-            # 0.23-0.58, speech, coughs, typing, clapping 0.00-0.05. Class 0 is speech: measured on every sound to
-            # tell a real word from a noise TeamSpeak let through (live: "Oui." written while nobody spoke).
-            tags = [self._tagger.run(None, {"waveform": audio[None, i:i + step]})[0][0]
-                    for i in range(0, max(len(audio) - 3200, 1), step)]  # a last bit under 0.2 s is skipped
-            best = max(float(t[16:22].max()) for t in tags)
-            self.speech_pct = int(max(float(t[0]) for t in tags) * 100)
+            # 0.23-0.58, speech, coughs, typing, clapping 0.00-0.05.
+            best = max(float(self._tagger.run(None, {"waveform": audio[None, i:i + step]})[0][0][16:22].max())
+                       for i in range(0, max(len(audio) - 3200, 1), step))  # a last bit under 0.2 s is skipped
         except Exception:
             log.exception("laughter detection failed")  # never stop listening because of it
             return False
@@ -185,9 +182,10 @@ class Transcriber:
 
     def transcribe(self, pcm: bytes) -> str:
         # Measured on 18 real sentences: Gemini better on 7 (calls, English words), the local model on 2, both very
-        # short ("Oui." heard "Alice": Gemini makes up a name from its list on a tiny sound). Short ones stay local.
+        # short ("Oui." heard "Alice": Gemini makes up a name from its list on a tiny sound). Short ones stay local:
+        # 0.9 s, measured live: "Oui." 0.68-0.86 s, while a 0.96 s "toptop" came out "tup tup" from the local model.
         self.engine = self.cfg.get("model", "nemo-canary-1b-v2")
-        if self.cfg.get("engine") == "gemini" and len(pcm) >= 32 * self.cfg.get("gemini_min_ms", 1200):
+        if self.cfg.get("engine") == "gemini" and len(pcm) >= 32 * self.cfg.get("gemini_min_ms", 900):
             try:
                 text = self.with_gemini(pcm)
                 self.engine = "gemini"
