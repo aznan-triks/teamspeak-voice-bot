@@ -85,8 +85,11 @@ class Transcriber:
             self.cloud = LLM({"base_url": cfg.get("gemini_url", GEMINI_URL), "model": cfg.get("gemini_model", "gemini-flash-latest"),
                               "api_key": key, "timeout_s": cfg.get("gemini_timeout_s", 15), "json_mode": False,
                               "fallbacks": cfg.get("gemini_fallbacks", [])})
+        self._loading = threading.Lock()
         if not cfg.get("lazy"):
-            self.local()  # loaded now even with Gemini: it is the fallback, and loading takes a few seconds
+            # Loaded in the background while the bot connects (a restart took ~35 s before it joined); a sentence
+            # that needs it before then simply waits.
+            threading.Thread(target=self.local, daemon=True).start()
 
     def load(self, model: str, threads: int = 0):
         import onnx_asr  # late import: heavy, and not needed by the tests
@@ -100,18 +103,19 @@ class Transcriber:
         return loaded, {"language": self.cfg["language"]} if takes_language else {}
 
     def local(self):
-        if self._local is None:
-            model, self.options = self.load(self.cfg.get("model", "nemo-canary-1b-v2"))
-            if self.cfg.get("vad", True):
-                import onnx_asr
+        with self._loading:
+            if self._local is None:
+                model, self.options = self.load(self.cfg.get("model", "nemo-canary-1b-v2"))
+                if self.cfg.get("vad", True):
+                    import onnx_asr
 
-                # Silero keeps only the speech: a breath or a click no longer comes out as "Merci." (measured), and
-                # never reaches the model. A long minimum silence keeps a joined sentence in one piece. The default
-                # 30 ms margin cut soft first sounds live ("botop, je t'ai parlé" heard as "Top, je t'ai parlé").
-                model = model.with_vad(onnx_asr.load_vad("silero"), min_silence_duration_ms=self.cfg.get("vad_split_ms", 2000),
-                                       max_speech_duration_s=30, speech_pad_ms=self.cfg.get("vad_pad_ms", 250))
-            self._local = model
-        return self._local
+                    # Silero keeps only the speech: a breath or a click no longer comes out as "Merci." (measured),
+                    # and never reaches the model. A long minimum silence keeps a joined sentence in one piece. The
+                    # default 30 ms margin cut soft first sounds live ("botop, je t'ai parlé" heard as "Top, ...").
+                    model = model.with_vad(onnx_asr.load_vad("silero"), min_silence_duration_ms=self.cfg.get("vad_split_ms", 2000),
+                                           max_speech_duration_s=30, speech_pad_ms=self.cfg.get("vad_pad_ms", 250))
+                self._local = model
+            return self._local
 
     def __call__(self, pcm: bytes) -> str:
         text = fix_names(no_loops(self.transcribe(pcm)), self.names())
