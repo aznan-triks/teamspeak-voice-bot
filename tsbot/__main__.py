@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import array
 import json
 import logging
 import os
@@ -125,7 +126,13 @@ def heard(header: dict, raw: dict, pcm: bytes, duration_ms: int, transcribe, arc
     )
     if bot:
         bot.listeners = header.get("listeners", bot.listeners)
-    log.info(SPOKEN + "[%s] %s  (%d ms audio, %d ms STT)", speaker.identity or speaker.nickname, text, duration_ms, stt_ms)
+    # Loudness of the first 40 ms against the loudest moment: speech already loud at the very start means its
+    # beginning was cut before reaching the bot (TeamSpeak's voice activation), not misheard.
+    samples = array.array("h", pcm[:len(pcm) // 2 * 2])
+    peak = max(max(samples, default=0), -min(samples, default=0)) or 1
+    start = max(max(samples[:640], default=0), -min(samples[:640], default=0)) * 100 // peak
+    log.info(SPOKEN + "[%s] %s  (%d ms audio, %d ms STT, start %d%%)", speaker.identity or speaker.nickname, text, duration_ms,
+             stt_ms, start)
     if hasattr(transcribe, "compare"):
         transcribe.compare(pcm, speaker.identity or speaker.nickname, text)
     t = Transcription(archive_id, speaker, header.get("started_ms", 0), duration_ms, text)
