@@ -5,6 +5,7 @@ import argparse
 import array
 import json
 import logging
+import math
 import os
 import re
 import signal
@@ -131,8 +132,11 @@ def heard(header: dict, raw: dict, pcm: bytes, duration_ms: int, transcribe, arc
     samples = array.array("h", pcm[:len(pcm) // 2 * 2])
     peak = max(max(samples, default=0), -min(samples, default=0)) or 1
     start = max(max(samples[:640], default=0), -min(samples[:640], default=0)) * 100 // peak
-    log.info(SPOKEN + "[%s] %s  (%d ms audio, %d ms STT %s, start %d%%)", speaker.identity or speaker.nickname, text,
-             duration_ms, stt_ms, getattr(transcribe, "engine", "?"), start)
+    # Loudness of the whole sound (dB, 0 = loudest possible): to tell the short noises TeamSpeak lets through from
+    # a voice (live: six made-up lines in 20 minutes while nobody spoke).
+    level = 10 * math.log10(max(sum(x * x for x in samples) / max(len(samples), 1), 1) / 32768 ** 2)
+    log.info(SPOKEN + "[%s] %s  (%d ms audio, %d ms STT %s, start %d%%, level %.0f dB)", speaker.identity or speaker.nickname,
+             text, duration_ms, stt_ms, getattr(transcribe, "engine", "?"), start, level)
     if hasattr(transcribe, "compare"):
         transcribe.compare(pcm, speaker.identity or speaker.nickname, text)
     t = Transcription(archive_id, speaker, header.get("started_ms", 0), duration_ms, text)
