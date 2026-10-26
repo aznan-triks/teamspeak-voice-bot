@@ -2,9 +2,13 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
+import time
 import urllib.request
+
+log = logging.getLogger(__name__)
 
 
 def parse_reply(content: str) -> dict:
@@ -28,6 +32,16 @@ class LLM:
         self.extra = cfg.get("extra", {})  # provider options, e.g. DeepSeek: {"reasoning_effort": "low"}
         if cfg.get("thinking") in ("off", "on"):  # DeepSeek's switch; "auto" sends nothing (other servers)
             self.extra = {"thinking": {"type": "disabled" if cfg["thinking"] == "off" else "enabled"}, **self.extra}
+        # When this service stops answering (quota, overload, outage, refused key), the next one of `fallbacks` is
+        # used: [{base_url, model, api_key or api_key_env}], each taking the rest of this config. A failing one rests
+        # rest_s seconds, twice as long each time in a row (10 min at most).
+        self.backups = []
+        for b in cfg.get("fallbacks", []):
+            backup = LLM({**{k: v for k, v in cfg.items() if k != "fallbacks"}, **b})
+            if "api_key" in b or "api_key_env" in b:  # otherwise: another model with the same key
+                backup.key = b.get("api_key") or os.environ.get(b.get("api_key_env", ""), "")
+            self.backups.append(backup)
+        self.rest_s, self.resting_until, self.fails = cfg.get("rest_s", 60), 0.0, 0
 
     def _request(self, path: str, body: dict | None = None) -> dict:
         headers = {"Content-Type": "application/json"}
@@ -45,6 +59,22 @@ class LLM:
             return False
 
     def request_chat(self, messages: list) -> str:
+        chain = [self, *self.backups]
+        # Resting services are skipped; when all of them rest, the one back soonest is tried anyway.
+        ready = [p for p in chain if p.resting_until <= time.monotonic()] or [min(chain, key=lambda p: p.resting_until)]
+        for p in ready:
+            try:
+                text = p._chat_once(messages)
+                p.fails = 0
+                return text
+            except Exception as error:
+                p.fails += 1
+                p.resting_until = time.monotonic() + min(p.rest_s * 2 ** (p.fails - 1), 600)
+                if p is ready[-1]:
+                    raise
+                log.warning("%s (%s) not answering, next one used: %s", p.model, p.url, str(error)[:150])
+
+    def _chat_once(self, messages: list) -> str:
         body = {"model": self.model, "temperature": self.temperature, "messages": messages, **self.extra}
         if self.json_mode:
             body["response_format"] = {"type": "json_object"}

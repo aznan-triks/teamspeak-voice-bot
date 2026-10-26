@@ -83,7 +83,8 @@ class Transcriber:
 
             key = cfg.get("api_key") or api_key or os.environ.get("GEMINI_API_KEY", "")
             self.cloud = LLM({"base_url": cfg.get("gemini_url", GEMINI_URL), "model": cfg.get("gemini_model", "gemini-flash-latest"),
-                              "api_key": key, "timeout_s": cfg.get("gemini_timeout_s", 15), "json_mode": False})
+                              "api_key": key, "timeout_s": cfg.get("gemini_timeout_s", 15), "json_mode": False,
+                              "fallbacks": cfg.get("gemini_fallbacks", [])})
         if not cfg.get("lazy"):
             self.local()  # loaded now even with Gemini: it is the fallback, and loading takes a few seconds
 

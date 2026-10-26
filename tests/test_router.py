@@ -380,6 +380,53 @@ class HelpersTest(unittest.TestCase):
             server.shutdown()
             server.server_close()
 
+    def test_a_service_that_stops_answering_hands_over_to_the_next(self):
+        # Live: Gemini's free models answered 503 or timed out for minutes; the bot must go on with another.
+        calls = []
+
+        class Handler(BaseHTTPRequestHandler):
+            def do_POST(self):
+                model = json.loads(self.rfile.read(int(self.headers["Content-Length"])))["model"]
+                calls.append((model, self.headers.get("Authorization")))
+                if model == "busy":
+                    self.send_response(503)
+                    self.end_headers()
+                    return
+                self.send_response(200)
+                self.end_headers()
+                self.wfile.write(json.dumps({"choices": [{"message": {"content": model}}]}).encode())
+
+            def log_message(self, *args):
+                pass
+
+        server = HTTPServer(("127.0.0.1", 0), Handler)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        try:
+            import os
+
+            os.environ["SPARE_KEY"] = "k2"
+            url = f"http://127.0.0.1:{server.server_port}/v1"
+            llm = LLM({"base_url": url, "model": "busy", "api_key": "k1", "json_mode": False,
+                       "fallbacks": [{"model": "spare", "api_key_env": "SPARE_KEY"}]})
+            with self.assertLogs("tsbot.llm", "WARNING"):
+                self.assertEqual(llm.request_chat([]), "spare")
+            self.assertEqual(calls, [("busy", "Bearer k1"), ("spare", "Bearer k2")])
+            self.assertEqual(llm.request_chat([]), "spare")  # the busy one rests: not asked again
+            self.assertEqual(len(calls), 3)
+            llm.resting_until = 0  # its rest is over: tried first again
+            with self.assertLogs("tsbot.llm", "WARNING"):
+                llm.request_chat([])
+            self.assertEqual(llm.fails, 2)  # failed twice in a row: rests twice as long
+            same_key = LLM({"base_url": url, "model": "busy", "api_key": "k1", "fallbacks": [{"model": "other"}]})
+            self.assertEqual(same_key.backups[0].key, "k1")  # another model of the same account
+            llm.backups[0].resting_until = llm.resting_until = 1e18
+            with self.assertRaises(Exception):  # all down: the error goes up (local model, degraded mode...)
+                LLM({"base_url": url, "model": "busy", "json_mode": False}).request_chat([])
+        finally:
+            del os.environ["SPARE_KEY"]
+            server.shutdown()
+            server.server_close()
+
 
 class ThinkingTest(unittest.TestCase):
     def test_thinking_switch_is_sent_only_when_chosen(self):

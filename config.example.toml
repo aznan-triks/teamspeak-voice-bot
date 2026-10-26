@@ -25,6 +25,8 @@ laugh_threshold_pct = 20  # lower = more laughs caught, more false ones
 # engine = "gemini"
 # gemini_model = "gemini-3.5-flash-lite"   # measured 1.0-1.4 s a sentence
 # gemini_min_ms = 1200
+# When Gemini stops answering (quota, overload), the next one is used, then the local model. Same key if none is given.
+# gemini_fallbacks = [{ model = "gemini-3-flash-preview" }, { model = "gemini-flash-lite-latest" }]
 # To judge another model on real voices: it transcribes the same sounds in the background and the log shows both texts
 # (a local model name, or "gemini").
 # compare_model = "onnx-community/whisper-large-v3-turbo"
@@ -83,6 +85,12 @@ tu parles comme un joueur, tu as des avis tranchés sur les jeux et tu aimes taq
 Quand on te demande un service, tu le rends sans faire d'histoires."""
 probe_interval_s = 300    # in degraded mode, check the LLM again this often
 prompt_file = "prompts/system_fr.txt"
+# Services tried in order when this one stops answering (quota, overload, outage, refused key). A failing one rests
+# 60 s (rest_s), twice as long each time in a row. Keys: api_key_env names an environment variable (.env).
+# fallbacks = [
+#   { base_url = "https://api.deepseek.com", model = "deepseek-flash", api_key_env = "DEEPSEEK_API_KEY" },
+#   { base_url = "http://127.0.0.1:8091/v1", model = "qwen3.5-4b", api_key = "", timeout_s = 60 },
+# ]
 
 [plugins]
 enabled = []              # e.g. ["tsbot.plugins_examples.scoreboard", "my_plugin"]
