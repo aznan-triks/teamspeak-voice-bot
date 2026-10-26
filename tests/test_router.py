@@ -281,6 +281,14 @@ class RouterTest(unittest.TestCase):
         router = Router({"wake_words": ["jarvis"], "personality": "Tu es drôle."}, FakeLLM(), self.bot, [])
         self.assertTrue(router.prompt.endswith("PERSONNALITÉ :\nTu es drôle.\n"))
 
+    def test_the_bot_reads_what_is_new_in_its_changelog(self):
+        self.setup(FakeLLM())
+        router = Router({"wake_words": ["jarvis"], "changelog_versions": 2}, FakeLLM(), self.bot, [])
+        news = router.prompt.split("NOUVEAUTÉS", 1)[1]
+        self.assertIn("- 0.3.0 — 2026-10-26 : The bot hears better", news)
+        self.assertEqual(news.count("\n- "), 2)  # the two latest versions only
+        self.assertNotIn("NOUVEAUTÉS", Router({"changelog_file": "missing.md"}, FakeLLM(), self.bot, []).prompt)
+
     def test_the_bot_knows_how_it_is_built(self):
         self.setup(FakeLLM())
         router = Router({"wake_words": ["jarvis"], "about": "transcription canary, réponses deepseek"}, FakeLLM(), self.bot, [])

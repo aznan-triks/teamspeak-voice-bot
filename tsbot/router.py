@@ -41,6 +41,16 @@ def no_relaunch(text: str) -> str:
     return " ".join(kept) if kept else text
 
 
+def changelog(path: str, versions: int) -> str:
+    """"## 0.3.0 — date" and its "Plain words" line, for the latest versions: what the bot says when asked what is new."""
+    try:
+        text = Path(path).read_text(encoding="utf-8")
+    except OSError:
+        return ""
+    found = re.findall(r"^## (.+)\n+\*\*Plain words:\*\* (.+)$", text, re.M)[:versions]
+    return "\n".join(f"- {version} : {words}" for version, words in found)
+
+
 def valid(args, schema: dict) -> bool:
     """JSON Schema subset: object with `properties` (type, enum) and `required`; unknown keys are refused."""
     if not isinstance(args, dict):
@@ -64,6 +74,9 @@ class Router:
     def __init__(self, cfg: dict, llm, bot, loaded: list):
         self.cfg, self.llm, self.bot, self.loaded = cfg, llm, bot, loaded
         self.prompt = Path(cfg.get("prompt_file", "prompts/system_fr.txt")).read_text(encoding="utf-8")
+        news = changelog(cfg.get("changelog_file", "CHANGELOG.md"), cfg.get("changelog_versions", 3))
+        if news:  # in the fixed part of the prompt: read once, cached by the LLM
+            self.prompt += "\nNOUVEAUTÉS (ton changelog, du plus récent ; réponds en français) :\n" + news + "\n"
         if cfg.get("personality"):
             self.prompt += "\nPERSONNALITÉ :\n" + cfg["personality"].strip() + "\n"
         self.conversing_until = 0.0  # after the bot answered, people can go on talking to it without its name
