@@ -25,6 +25,8 @@ laugh_threshold_pct = 20  # lower = more laughs caught, more false ones
 # engine = "gemini"
 # gemini_model = "gemini-3.5-flash-lite"   # measured 1.0-1.4 s a sentence
 # gemini_min_ms = 900
+# min_level_db = -45    # quieter sounds are skipped: short noises TeamSpeak lets through (-51 to -55 dB live) that
+#                        # speech models turn into words; a voice was about -32 dB. Check "level" in the log first.
 # When Gemini stops answering (quota, overload), the next one is used, then the local model. Same key if none is given.
 # gemini_fallbacks = [{ model = "gemini-3-flash-preview" }, { model = "gemini-flash-lite-latest" }]
 # To judge another model on real voices: it transcribes the same sounds in the background and the log shows both texts

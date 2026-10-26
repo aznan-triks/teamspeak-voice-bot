@@ -111,6 +111,13 @@ def serve(stream, transcribe, archive: Archive, loaded: list, cfg: dict, bot=Non
 def heard(header: dict, raw: dict, pcm: bytes, duration_ms: int, transcribe, archive, loaded, cfg, bot, router) -> None:
     """One utterance: transcribe, archive, tell the plugins and the conversation."""
     stt = cfg.get("stt", {})
+    samples = array.array("h", pcm[:len(pcm) // 2 * 2])
+    # Loudness of the whole sound (dB, 0 = loudest possible). Live, TeamSpeak let through short noises nobody said
+    # (-55 dB) that both speech models turned into words ("Oui.", "Ilker", whole sentences); a voice was -32 dB.
+    level = 10 * math.log10(max(sum(x * x for x in samples) / max(len(samples), 1), 1) / 32768 ** 2)
+    if level < stt.get("min_level_db", -100):
+        log.info("too quiet to be speech, skipped: %.0f dB, %d ms", level, duration_ms)
+        return
     t0 = time.monotonic()
     text = transcribe(pcm)
     stt_ms = int((time.monotonic() - t0) * 1000)
@@ -129,12 +136,8 @@ def heard(header: dict, raw: dict, pcm: bytes, duration_ms: int, transcribe, arc
         bot.listeners = header.get("listeners", bot.listeners)
     # Loudness of the first 40 ms against the loudest moment: speech already loud at the very start means its
     # beginning was cut before reaching the bot (TeamSpeak's voice activation), not misheard.
-    samples = array.array("h", pcm[:len(pcm) // 2 * 2])
     peak = max(max(samples, default=0), -min(samples, default=0)) or 1
     start = max(max(samples[:640], default=0), -min(samples[:640], default=0)) * 100 // peak
-    # Loudness of the whole sound (dB, 0 = loudest possible): to tell the short noises TeamSpeak lets through from
-    # a voice (live: six made-up lines in 20 minutes while nobody spoke).
-    level = 10 * math.log10(max(sum(x * x for x in samples) / max(len(samples), 1), 1) / 32768 ** 2)
     log.info(SPOKEN + "[%s] %s  (%d ms audio, %d ms STT %s, start %d%%, level %.0f dB)", speaker.identity or speaker.nickname,
              text, duration_ms, stt_ms, getattr(transcribe, "engine", "?"), start, level)
     if hasattr(transcribe, "compare"):

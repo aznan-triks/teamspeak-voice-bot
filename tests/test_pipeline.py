@@ -86,6 +86,15 @@ class PipelineTest(unittest.TestCase):
               archive, [], {**CFG, "web": {"settings_file": settings}})
         self.assertEqual(archive.export_jsonl(io.StringIO()), 1)
 
+    def test_sounds_too_quiet_to_be_speech_are_skipped(self):
+        # frame() makes a steady signal of about -42 dB: skipped below a -30 dB threshold, transcribed without one.
+        heard = []
+        serve(io.BytesIO(frame("utterance", ALICE, ms=1000)), lambda pcm: heard.append(1) or "Oui.", Archive(":memory:"), [],
+              {**CFG, "stt": {"min_level_db": -30}})
+        self.assertEqual(heard, [])
+        serve(io.BytesIO(frame("utterance", ALICE, ms=1000)), lambda pcm: heard.append(1) or "Oui.", Archive(":memory:"), [], CFG)
+        self.assertEqual(heard, [1])
+
     def test_short_merci_is_noise(self):
         stream = io.BytesIO(frame("utterance", ALICE, ms=700) + frame("utterance", ALICE, ms=2000))
         archive = Archive(":memory:")
