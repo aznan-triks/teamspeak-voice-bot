@@ -119,6 +119,10 @@ class Transcriber:
 
     def __call__(self, pcm: bytes) -> str:
         text = fix_names(no_loops(self.transcribe(pcm)), self.names())
+        # Nobody says more than a few words a second: more is made up from a short noise (live: 7 words from 0.66 s).
+        if len(text.split()) > 2 + len(pcm) / 32000 * self.cfg.get("max_words_per_s", 6):
+            log.info(SPOKEN + "too many words for %d ms of sound, not kept: %s", len(pcm) // 32, text[:80])
+            return ""
         if not self.laughing(pcm):
             return text
         laugh = self.cfg.get("laugh_text", "(rires)")

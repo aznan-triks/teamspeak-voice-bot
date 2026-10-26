@@ -76,6 +76,16 @@ class GeminiTest(unittest.TestCase):
     def tearDown(self):
         self.server.shutdown()
 
+    def test_more_words_than_anyone_can_say_are_dropped(self):
+        FakeGemini.content = "Tu te souviens quand on était petits ?"  # live, from 0.66 s of sound
+        self.stt.cfg["gemini_min_ms"] = 0  # as on the NUC: short sounds go to Gemini too
+        try:
+            with self.assertLogs("tsbot.stt", "INFO"):
+                self.assertEqual(self.stt(b"\x00\x01" * 10560), "")  # 0.66 s
+            self.assertEqual(self.stt(b"\x00\x01" * 32000), "Tu te souviens quand on était petits ?")  # 2 s: fine
+        finally:
+            FakeGemini.content = " Wesh BaJell, tu lances ? "
+
     def test_short_sounds_stay_local(self):
         if importlib.util.find_spec("numpy") is None:
             self.skipTest("numpy (installed in the Docker image) is needed for the local model")
