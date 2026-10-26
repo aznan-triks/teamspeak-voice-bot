@@ -226,4 +226,5 @@ class Transcriber:
                      f"(n'écris jamais un nom de cette liste que tu n'entends pas) : {names}." if names else ""))
         audio = {"type": "input_audio", "input_audio": {"data": base64.b64encode(buf.getvalue()).decode(), "format": "wav"}}
         reply = self.cloud.request_chat([{"role": "system", "content": system}, {"role": "user", "content": [audio]}])
-        return reply.strip().strip('"').strip()
+        # Gemini marks sounds that are not words ("<noise>", live): nothing was said, so nothing is written.
+        return re.sub(r"<[^<>]*>", "", reply).strip().strip('"').strip()

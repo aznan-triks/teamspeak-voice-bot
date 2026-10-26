@@ -10,7 +10,7 @@ from tsbot.stt import Transcriber, fix_names, no_loops
 
 
 class FakeGemini(BaseHTTPRequestHandler):
-    requests, fail, empty = [], False, False
+    requests, fail, empty, content = [], False, False, " Wesh BaJell, tu lances ? "
 
     def do_POST(self):
         body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
@@ -19,7 +19,7 @@ class FakeGemini(BaseHTTPRequestHandler):
             self.send_response(429)
             self.end_headers()
             return
-        message = {"role": "assistant"} if FakeGemini.empty else {"content": " Wesh BaJell, tu lances ? "}
+        message = {"role": "assistant"} if FakeGemini.empty else {"content": FakeGemini.content}
         data = json.dumps({"choices": [{"message": message}]}).encode()
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
@@ -121,6 +121,11 @@ class GeminiCompareTest(unittest.TestCase):
                 self.assertEqual(stt.with_gemini(b"\x00\x01" * 16000), "")
             finally:
                 FakeGemini.empty = False
+            FakeGemini.content = "<noise>"  # live: a sound that is not words
+            try:
+                self.assertEqual(stt.with_gemini(b"\x00\x01" * 16000), "")
+            finally:
+                FakeGemini.content = " Wesh BaJell, tu lances ? "
         finally:
             server.shutdown()
 
