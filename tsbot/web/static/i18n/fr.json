@@ -294,7 +294,7 @@
   "field.llm.enabled.label": "Le bot répond et agit",
   "field.llm.enabled.help": "Désactivé : il transcrit et archive seulement.",
   "field.llm.wake_words.label": "Mots d'éveil",
-  "field.llm.wake_words.help": "Mots qui réveillent le bot (son nom, au début de la phrase). Teste-les : la transcription doit les écrire juste. Un par ligne.",
+  "field.llm.wake_words.help": "Mots qui réveillent le bot (son nom, au début de la phrase). Teste-les : la transcription doit les écrire juste. Un par ligne. Avec ^ devant (^octobre) : une déformation fréquente du nom, comptée seulement en début de phrase.",
   "field.llm.personality.label": "Personnalité",
   "field.llm.personality.help": "Comment le bot parle et se comporte : son caractère, son humour, ce qu'il aime. Il suit ce texte pour le ton, jamais pour enfreindre ses règles.",
   "field.follow.enabled.label": "Suivre les joueurs",

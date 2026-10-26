@@ -294,7 +294,7 @@
   "field.llm.enabled.label": "Bot Replies and Acts",
   "field.llm.enabled.help": "Disabled: the bot only transcribes and archives.",
   "field.llm.wake_words.label": "Wake Words",
-  "field.llm.wake_words.help": "Words that trigger the bot (its name at the beginning of a sentence). Test them: speech recognition must transcribe them accurately. One per line.",
+  "field.llm.wake_words.help": "Words that trigger the bot (its name at the beginning of a sentence). Test them: speech recognition must transcribe them accurately. One per line. With ^ in front (^octobre): a common mishearing of the name, counted only at the start of a sentence.",
   "field.llm.personality.label": "Personality",
   "field.llm.personality.help": "How the bot speaks and behaves: character, humor, preferences. It follows this tone guide, but never breaks its safety rules.",
   "field.follow.enabled.label": "Follow Players",

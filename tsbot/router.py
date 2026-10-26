@@ -70,12 +70,14 @@ class Router:
         self.asked_back = False  # its last words were a question ("clarify")
         self.started_at = time.time()  # the bot is asked why it left: it was restarted (updates)
         self.partner, self.replied_ms = None, 0  # who the bot last answered, and when it started saying it (Unix ms)
-        self.wake_words = cfg.get("wake_words", ["hector"])
-        one = [w for w in self.wake_words if " " not in w.strip()]
-        two = [w for w in self.wake_words if " " in w.strip()]
+        words = cfg.get("wake_words", ["hector"])
+        self.wake_words = [w.lstrip("^") for w in words]
+        one = [w for w in words if " " not in w.strip() and not w.startswith("^")]
+        two = [w.lstrip("^") for w in words if " " in w.strip() or w.startswith("^")]
         # A two-word name is often a common phrase too ("c'est beau top" heard for "c'est au top"): it only counts
         # at the start of a sentence, after one word at most ("Allô, beau top ?"). Its words may be split by a
-        # comma or a full stop ("Top, top." heard live for "top top").
+        # comma or a full stop ("Top, top." heard live for "top top"). "^word": a common word the name is often
+        # heard as ("Oktobre" for "toptop", live), counted the same way: at the start only.
         parts = ([r"\b(?:" + "|".join(map(re.escape, one)) + r")\b"] if one else []) + (
             [r"(?:^|[.!?]\s+)(?:\w+,?\s+)?(?:" + "|".join(r"\W+".join(map(re.escape, w.split())) for w in two) + r")\b"]
             if two else [])
