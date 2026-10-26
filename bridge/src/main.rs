@@ -165,6 +165,7 @@ fn speaker(con: &Connection, id: u16) -> Value {
 		"channel_id": c.channel.0,
 		// The channel's voice quality (set on the server): a low one makes speech-to-text worse for everyone in it.
 		"channel_codec": state.channels.get(&c.channel).map(|ch| format!("{:?} {:?}", ch.codec, ch.codec_quality)),
+		"channel_name": state.channels.get(&c.channel).map(|ch| ch.name.clone()),
 		"hearing": !c.output_muted && c.output_hardware_enabled, // headset on, sound not muted
 	})
 }

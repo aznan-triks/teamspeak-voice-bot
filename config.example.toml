@@ -19,7 +19,14 @@ language = "fr"
 vocabulary = []           # the group's own words (games, tools...): what sounds like one is spelled like it
 laughs = true             # add "(rires)" when someone laughs (a 10 MB sound tagger, mispeech/ced-mini, ~20 ms a sentence)
 laugh_threshold_pct = 20  # lower = more laughs caught, more false ones
-# To judge another model on real voices: it transcribes the same sounds in the background and the log shows both texts.
+# Better on real voices (calls, English words), but the sound leaves this machine: Google Gemini, key in GEMINI_API_KEY
+# or the site. Sounds shorter than gemini_min_ms stay local (on a tiny sound Gemini makes up a name). If Gemini
+# fails (quota, network), the local model writes the sentence.
+# engine = "gemini"
+# gemini_model = "gemini-3.5-flash-lite"   # measured 1.0-1.4 s a sentence
+# gemini_min_ms = 1200
+# To judge another model on real voices: it transcribes the same sounds in the background and the log shows both texts
+# (a local model name, or "gemini").
 # compare_model = "onnx-community/whisper-large-v3-turbo"
 # compare_threads = 2       # CPU cores it may use
 # compare_nice = 15         # lower priority than the bot

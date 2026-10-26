@@ -76,9 +76,16 @@ class GeminiTest(unittest.TestCase):
     def tearDown(self):
         self.server.shutdown()
 
+    def test_short_sounds_stay_local(self):
+        if importlib.util.find_spec("numpy") is None:
+            self.skipTest("numpy (installed in the Docker image) is needed for the local model")
+        sent = len(FakeGemini.requests)
+        self.assertEqual((self.stt(b"\x00\x01" * 16000), self.stt.engine), ("local", "nemo-canary-1b-v2"))  # 1 s
+        self.assertEqual(len(FakeGemini.requests), sent)
+
     def test_names_go_with_the_audio_and_failures_fall_back(self):
-        pcm = b"\x00\x01" * 16000
-        self.assertEqual(self.stt(pcm), "Wesh BaJell, tu lances ?")
+        pcm = b"\x00\x01" * 32000  # 2 s: long enough for Gemini
+        self.assertEqual((self.stt(pcm), self.stt.engine), ("Wesh BaJell, tu lances ?", "gemini"))
         auth, body = FakeGemini.requests[-1]
         self.assertEqual(auth, "Bearer k")
         self.assertIn("BaJell, IPKOZ.", body["messages"][0]["content"])  # each name once

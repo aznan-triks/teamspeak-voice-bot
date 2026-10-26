@@ -180,9 +180,14 @@ class Transcriber:
                      fix_names(other.strip(), self.names()), (time.monotonic() - started) * 1000)
 
     def transcribe(self, pcm: bytes) -> str:
-        if self.cfg.get("engine") == "gemini":  # as a compare model only, Gemini never writes the archive
+        # Measured on 18 real sentences: Gemini better on 7 (calls, English words), the local model on 2, both very
+        # short ("Oui." heard "Alice": Gemini makes up a name from its list on a tiny sound). Short ones stay local.
+        self.engine = self.cfg.get("model", "nemo-canary-1b-v2")
+        if self.cfg.get("engine") == "gemini" and len(pcm) >= 32 * self.cfg.get("gemini_min_ms", 1200):
             try:
-                return self.with_gemini(pcm)
+                text = self.with_gemini(pcm)
+                self.engine = "gemini"
+                return text
             except Exception as error:  # quota, network, refused key...
                 log.warning("Gemini transcription failed, local model used instead: %s", str(error)[:200])
         import numpy as np

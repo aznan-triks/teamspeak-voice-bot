@@ -131,8 +131,8 @@ def heard(header: dict, raw: dict, pcm: bytes, duration_ms: int, transcribe, arc
     samples = array.array("h", pcm[:len(pcm) // 2 * 2])
     peak = max(max(samples, default=0), -min(samples, default=0)) or 1
     start = max(max(samples[:640], default=0), -min(samples[:640], default=0)) * 100 // peak
-    log.info(SPOKEN + "[%s] %s  (%d ms audio, %d ms STT, start %d%%)", speaker.identity or speaker.nickname, text, duration_ms,
-             stt_ms, start)
+    log.info(SPOKEN + "[%s] %s  (%d ms audio, %d ms STT %s, start %d%%)", speaker.identity or speaker.nickname, text,
+             duration_ms, stt_ms, getattr(transcribe, "engine", "?"), start)
     if hasattr(transcribe, "compare"):
         transcribe.compare(pcm, speaker.identity or speaker.nickname, text)
     t = Transcription(archive_id, speaker, header.get("started_ms", 0), duration_ms, text)
