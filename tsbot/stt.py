@@ -188,6 +188,10 @@ class Transcriber:
         import numpy as np
 
         audio = np.frombuffer(pcm, np.int16).astype(np.float32) / 32768.0
+        # TeamSpeak sends speech from its very first sample: with no quiet before it, the first word is often lost
+        # or misheard ("toptop" → "Oktobre", live). A short silence on both sides gives the model a clean start.
+        quiet = np.zeros(16 * self.cfg.get("lead_in_ms", 300), np.float32)
+        audio = np.concatenate([quiet, audio, quiet])
         model = self.local()
         if hasattr(model, "asr"):  # live: a 2.7 s "Ooooh" came out as 55 s of "o" and froze the bot; cap the text length
             model.asr.config["max_sequence_length"] = 30 + int(len(audio) / 16000 * self.cfg.get("max_tokens_per_s", 10))
