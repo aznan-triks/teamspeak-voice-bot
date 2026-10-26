@@ -194,7 +194,6 @@
   "plugins.success": "Connexion OK. Actions : {actions}. Données : {context}.",
   "plugins.none_actions": "aucune",
   "plugins.saved_toast": "Enregistré. Le test utilise les réglages enregistrés ; « Appliquer » les donne au bot.",
-  "plugins.label.topdestops": "Top des Tops",
   "plugins.label.scoreboard": "Tableau des scores (exemple)",
   "plugins.setting_name_label": "Nom du réglage",
   "plugins.setting_value_label": "Valeur",

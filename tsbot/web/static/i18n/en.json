@@ -194,7 +194,6 @@
   "plugins.success": "Connection OK. Actions: {actions}. Context data: {context}.",
   "plugins.none_actions": "none",
   "plugins.saved_toast": "Saved. Test runs with saved settings; 'Apply' passes them to the live bot.",
-  "plugins.label.topdestops": "Top of the Tops",
   "plugins.label.scoreboard": "Scoreboard (example)",
   "plugins.setting_name_label": "Setting name",
   "plugins.setting_value_label": "Value",

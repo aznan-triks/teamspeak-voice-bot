@@ -951,7 +951,6 @@ async function pagePlugins() {
   const enabled = new Set(s.plugins.enabled);
   const config = s.plugins.config;
   const labelPlugin = (n) => ({
-    topdestops: t("plugins.label.topdestops"),
     "tsbot.plugins_examples.scoreboard": t("plugins.label.scoreboard"),
   }[n] || n);
 

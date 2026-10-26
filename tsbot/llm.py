@@ -48,7 +48,8 @@ class LLM:
         body = {"model": self.model, "temperature": self.temperature, "messages": messages, **self.extra}
         if self.json_mode:
             body["response_format"] = {"type": "json_object"}
-        return self._request("/chat/completions", body)["choices"][0]["message"]["content"] or ""
+        # Gemini leaves "content" out of an empty answer (live, on a short "Oui."), which the transcription allows.
+        return self._request("/chat/completions", body)["choices"][0]["message"].get("content") or ""
 
     def chat(self, system: str, user: str) -> dict:
         return parse_reply(self.request_chat([{"role": "system", "content": system}, {"role": "user", "content": user}]))
