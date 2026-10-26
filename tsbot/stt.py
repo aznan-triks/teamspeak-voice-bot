@@ -129,6 +129,18 @@ class Transcriber:
         noise = re.sub(r"\W+", "", text.lower()) in self.cfg.get("noise_phrases", ["merci"])  # a laugh alone heard as "Merci."
         return laugh if noise else f"{text} {laugh}".strip()
 
+    def speech_ms(self, pcm: bytes) -> int:
+        """How much of the sound Silero hears as speech: TeamSpeak lets through short noises as loud as a voice
+        (live: "bah oui" made up at -38 dB, a real "top-top" was -37 dB)."""
+        import numpy as np
+        import onnx_asr
+
+        if getattr(self, "_vad", None) is None:
+            self._vad = onnx_asr.load_vad("silero")
+        audio = np.frombuffer(pcm, np.int16).astype(np.float32) / 32768.0
+        segments = next(self._vad.segment_batch(audio[None], np.array([len(audio)]), 16000))
+        return sum(end - start for start, end in segments) // 16
+
     def laughing(self, pcm: bytes) -> bool:
         """The speech model drops laughter: a small sound tagger (CED, AudioSet classes) hears it instead, in ~20 ms."""
         if not self.cfg.get("laughs"):

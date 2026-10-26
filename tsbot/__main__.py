@@ -138,8 +138,14 @@ def heard(header: dict, raw: dict, pcm: bytes, duration_ms: int, transcribe, arc
     # beginning was cut before reaching the bot (TeamSpeak's voice activation), not misheard.
     peak = max(max(samples, default=0), -min(samples, default=0)) or 1
     start = max(max(samples[:640], default=0), -min(samples[:640], default=0)) * 100 // peak
-    log.info(SPOKEN + "[%s] %s  (%d ms audio, %d ms STT %s, start %d%%, level %.0f dB)", speaker.identity or speaker.nickname,
-             text, duration_ms, stt_ms, getattr(transcribe, "engine", "?"), start, level)
+    try:
+        speech = transcribe.speech_ms(pcm) if hasattr(transcribe, "speech_ms") else "?"
+    except Exception:
+        log.exception("speech measure failed")  # a measure only: never stops the sentence
+        speech = "?"
+    log.info(SPOKEN + "[%s] %s  (%d ms audio, %d ms STT %s, start %d%%, level %.0f dB, speech %s ms)",
+             speaker.identity or speaker.nickname, text, duration_ms, stt_ms, getattr(transcribe, "engine", "?"), start,
+             level, speech)
     if hasattr(transcribe, "compare"):
         transcribe.compare(pcm, speaker.identity or speaker.nickname, text)
     t = Transcription(archive_id, speaker, header.get("started_ms", 0), duration_ms, text)
