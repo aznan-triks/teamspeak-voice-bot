@@ -2,6 +2,7 @@
 import importlib.util
 import json
 import threading
+import time
 import unittest
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
@@ -88,6 +89,27 @@ class GeminiTest(unittest.TestCase):
             self.assertEqual(self.stt(pcm), "local")
         finally:
             FakeGemini.fail = False
+
+
+class GeminiCompareTest(unittest.TestCase):
+    def test_gemini_as_second_model_is_only_logged(self):
+        server = HTTPServer(("127.0.0.1", 0), FakeGemini)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        try:
+            url = f"http://127.0.0.1:{server.server_address[1]}"
+            stt = Transcriber({"compare_model": "gemini", "gemini_url": url, "lazy": True}, api_key="k")
+            stt.names = lambda: ["BaJell"]
+            self.assertIsNotNone(stt.cloud)
+            with self.assertLogs("tsbot.stt", "INFO") as logs:
+                stt.compare(b"\x00\x01" * 16000, "Ilker", "Wesh Bajel")
+                for _ in range(50):
+                    if logs.output:
+                        break
+                    time.sleep(0.05)
+            self.assertIn("[spoken] compare [Ilker] nemo-canary-1b-v2: Wesh Bajel | gemini: Wesh BaJell, tu lances ?",
+                          logs.output[0])
+        finally:
+            server.shutdown()
 
 
 class FakeTagger:

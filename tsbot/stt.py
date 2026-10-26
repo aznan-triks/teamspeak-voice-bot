@@ -78,7 +78,7 @@ class Transcriber:
         self.names = lambda: []  # set by the bot: people, nicknames and words to expect
         self._local = None
         self.cloud = None
-        if cfg.get("engine") == "gemini":
+        if "gemini" in (cfg.get("engine"), cfg.get("compare_model")):
             from .llm import LLM
 
             key = cfg.get("api_key") or api_key or os.environ.get("GEMINI_API_KEY", "")
@@ -158,16 +158,21 @@ class Transcriber:
             log.info("compare: second model busy, sound skipped")
 
     def _compare_loop(self, name: str) -> None:
-        import numpy as np
-
         if hasattr(os, "setpriority"):  # Linux: this thread (and the model's threads it starts) yield to the bot
             os.setpriority(os.PRIO_PROCESS, threading.get_native_id(), self.cfg.get("compare_nice", 15))
-        model, options = self.load(name, self.cfg.get("compare_threads", 2))
+        if name == "gemini":
+            recognize = self.with_gemini
+        else:
+            import numpy as np
+
+            model, options = self.load(name, self.cfg.get("compare_threads", 2))
+            recognize = lambda pcm: model.recognize(np.frombuffer(pcm, np.int16).astype(np.float32) / 32768.0,
+                                                    sample_rate=16000, **options)
         while True:
             pcm, who, text = self.queue.get()
             started = time.monotonic()
             try:
-                other = model.recognize(np.frombuffer(pcm, np.int16).astype(np.float32) / 32768.0, sample_rate=16000, **options)
+                other = recognize(pcm)
             except Exception:
                 log.exception("compare: %s failed", name)
                 continue
@@ -175,7 +180,7 @@ class Transcriber:
                      fix_names(other.strip(), self.names()), (time.monotonic() - started) * 1000)
 
     def transcribe(self, pcm: bytes) -> str:
-        if self.cloud is not None:
+        if self.cfg.get("engine") == "gemini":  # as a compare model only, Gemini never writes the archive
             try:
                 return self.with_gemini(pcm)
             except Exception as error:  # quota, network, refused key...
