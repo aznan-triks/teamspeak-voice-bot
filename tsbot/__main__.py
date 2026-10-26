@@ -193,7 +193,9 @@ def run(cfg: dict, logs=None) -> None:
         bot = Bot(voice, archive)
         # Asked live "which model do you use for transcription?": it did not know how it is built.
         stt = cfg.get("stt", {})
-        about = (f"transcription {stt.get('model', 'nemo-canary-1b-v2')}"
+        local = stt.get("model", "nemo-canary-1b-v2")
+        about = ((f"transcription {stt.get('gemini_model', 'Gemini')} (Google), {local} pour les sons courts et en secours"
+                  if stt.get("engine") == "gemini" else f"transcription {local}")
                  + (f" (comparée à {stt['compare_model']})" if stt.get("compare_model") else "")
                  + f", réponses {cfg['llm'].get('model', '?')}")
         return bridge, voice, bot, Router({**cfg["llm"], "about": about}, llm, bot, loaded) if llm else None
