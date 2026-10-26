@@ -210,6 +210,16 @@ class RouterTest(unittest.TestCase):
         self.hear(ALICE, "jarvis j'ai pas compris", now=5)
         self.assertEqual(self.voice.said, ["Ola, je suis là.", "Ola ! Je suis là"])
 
+    def test_the_answer_to_its_question_never_meets_silence(self):
+        # Live: "Combien de points ?" → "des dizaines" → the same question again was held back: nothing said.
+        ask = {"type": "clarify", "text": "Combien de points ?"}
+        llm = FakeLLM(ask, ask, PROPOSE)
+        self.setup(llm)
+        self.router.cfg["follow_up_s"] = 0
+        self.hear(ALICE, "jarvis des points pour Bob", now=1)
+        self.hear(ALICE, "des dizaines et des dizaines", now=5)
+        self.assertEqual((llm.calls, self.voice.said[-1]), (3, "Un point pour Bob, je valide ?"))
+
     def test_without_its_name_a_repeat_is_not_said(self):
         answer = {"type": "answer", "text": "Salut !"}
         llm = FakeLLM(answer, answer)

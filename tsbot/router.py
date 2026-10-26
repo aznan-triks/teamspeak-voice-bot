@@ -153,8 +153,11 @@ class Router:
                 log.info(SPOKEN + "repeated answer: %s", text[:80])  # small models say the same thing again
                 # Called by name, silence is worse (live: "botop, j'ai pas compris" got nothing four times in a row):
                 # asked once more for something new, and said even if repeated (it was asked to repeat).
-                again = self._ask(now, self.cfg.get("repeat_note", "RÉPÉTITION : tu viens déjà de dire ça. Réponds à la "
-                                  "dernière ligne avec du neuf ; ne le redis que si on te demande de répéter.")) if addressed else None
+                again = (self._ask(now, self.cfg.get("repeat_note", "RÉPÉTITION : tu viens déjà de dire ça. Réponds à la "
+                                  "dernière ligne avec du neuf ; ne le redis que si on te demande de répéter."))
+                         if addressed or self.asked_back else None)  # live: the answer to its own question got silence
+                if again and again.get("type") == "propose":  # asked again, it may now have all it needs
+                    return self._propose(again, t, now, asked, spoken_to)
                 if not (again and again.get("type") in ("answer", "clarify", "explain") and isinstance(again.get("text"), str)):
                     return
                 kind, text = again["type"], no_relaunch(again["text"]) if again["type"] == "answer" else again["text"]
