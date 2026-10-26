@@ -103,7 +103,7 @@ enabled = []              # e.g. ["tsbot.plugins_examples.scoreboard", "my_plugi
 [follow]
 enabled = false           # go where most known players (see [identities]) are; a second bot joins when they split up
 max_bots = 2
-move_after_s = 10         # people must stay this long before the bot follows (no hopping when someone passes by)
+move_after_s = 3          # people must stay this long before the bot follows (no hopping); at start it goes at once
 stop_after_s = 60         # the second bot leaves this long after the players are together again
 nickname_2 = "BoToP 2 (enregistrement)"
 # identity_file_2 = "data/identity_2.json"   # default: next to [teamspeak] identity_file

@@ -18,6 +18,7 @@ class Follower:
         self.since = 0.0  # since when `wanted` has not changed
         self.asked: dict = {}  # seat -> (channel, when): moves asked, not seen done yet
         self.blocked: dict = {}  # channel -> until when: the bot could not get in (password, rights)
+        self.seen = False  # known players seen once: from then on, a change waits for people to settle
 
     def decide(self, clients: list, bot_uids: list, now: float) -> dict:
         """`bot_uids[i]`: UID of seat i (seat 0 always runs; None while a seat is not connected yet).
@@ -32,9 +33,12 @@ class Follower:
         # Most known players first; on a tie, a channel that already has a bot, so nobody moves for nothing.
         wanted = sorted(counts, key=lambda ch: (-counts[ch], ch not in at, ch))[: self.cfg.get("max_bots", 2)]
         if wanted != self.wanted:
-            self.wanted, self.since = wanted, now
+            # At start the bot goes at once (live: 13-18 s after each restart); later, people may still be moving.
+            self.since = now if self.seen else now - self.cfg.get("move_after_s", 3)
+            self.wanted = wanted
+        self.seen = self.seen or bool(wanted)
         out = {"move": {}, "start": False, "stop": False}
-        if now - self.since < self.cfg.get("move_after_s", 10):
+        if now - self.since < self.cfg.get("move_after_s", 3):
             return out  # people still moving around: stay put
         second = len(bot_uids) > 1
         if second and len(wanted) < 2 and (at[1] in wanted or now - self.since >= self.cfg.get("stop_after_s", 60)):

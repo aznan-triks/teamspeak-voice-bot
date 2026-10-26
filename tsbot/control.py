@@ -90,7 +90,7 @@ class Control:
                 self.voice.send({"cmd": "clients"})
             except Exception:
                 log.exception("could not ask the bridge for the client list")
-            time.sleep(self.cfg.get("web", {}).get("clients_refresh_s", 5))
+            time.sleep(self.cfg.get("web", {}).get("clients_refresh_s", 1))  # who is where: the bot follows from it
 
     def snapshot(self) -> dict:
         me = self.bot.me

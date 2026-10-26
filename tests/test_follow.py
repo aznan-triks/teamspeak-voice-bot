@@ -18,14 +18,15 @@ class FollowTest(unittest.TestCase):
 
     def test_goes_where_most_known_players_are_once_it_is_stable(self):
         clients = people(("Ilker", 5), ("Cotty", 5), (None, 9), (None, 9), (None, 9), bots=[1])
-        self.assertEqual(self.f.decide(clients, [BOT1], 0)["move"], {})  # people may still be moving around
-        self.assertEqual(self.f.decide(clients, [BOT1], 10)["move"], {0: 5})  # strangers do not count
-        self.assertEqual(self.f.decide(clients, [BOT1], 12)["move"], {})  # asked once, not again
+        self.assertEqual(self.f.decide(clients, [BOT1], 0)["move"], {0: 5})  # at start: at once; strangers do not count
+        self.assertEqual(self.f.decide(clients, [BOT1], 2)["move"], {})  # asked once, not again
+        moved = people(("Ilker", 6), ("Cotty", 6), bots=[5])
+        self.assertEqual(self.f.decide(moved, [BOT1], 20)["move"], {})  # later: people may still be moving around
+        self.assertEqual(self.f.decide(moved, [BOT1], 30)["move"], {0: 6})
 
     def test_second_bot_when_players_split_then_stopped(self):
         split = people(("Ilker", 5), ("Cotty", 7), bots=[5])
-        self.assertTrue(self.f.decide(split, [BOT1], 0)["start"] is False)
-        self.assertTrue(self.f.decide(split, [BOT1], 10)["start"])
+        self.assertTrue(self.f.decide(split, [BOT1], 0)["start"])  # split from the start: at once
         out = self.f.decide(people(("Ilker", 5), ("Cotty", 7), bots=[5, 1]), [BOT1, BOT2], 12)
         self.assertEqual(out["move"], {1: 7})  # the first bot stays with Ilker, the second goes to Cotty
         together = people(("Ilker", 7), ("Cotty", 7), bots=[5, 7])
@@ -40,7 +41,6 @@ class FollowTest(unittest.TestCase):
 
     def test_channel_it_cannot_join_is_left_alone(self):
         clients = people(("Ilker", 5), bots=[1])
-        self.f.decide(clients, [BOT1], 0)
         self.assertEqual(self.f.decide(clients, [BOT1], 10)["move"], {0: 5})
         with self.assertLogs("tsbot.follow", "WARNING"):
             self.f.decide(clients, [BOT1], 30)  # still not there 20 s later: password or rights
