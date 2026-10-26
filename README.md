@@ -13,13 +13,16 @@ Everything below was tested on a real TeamSpeak server (October 2026).
 | Joins a TeamSpeak 3 server (TeamSpeak 6 servers work too) | small Rust client built on [tsclientlib](https://github.com/ReSpeak/tsclientlib) |
 | Hears each person separately, cuts speech into sentences | TeamSpeak already sends one voice stream per person |
 | Knows who is talking | TeamSpeak UID or server group → a name you choose |
-| Speech-to-text (25 European languages, language forced) | [NVIDIA Canary-1B-v2](https://huggingface.co/nvidia/canary-1b-v2) (or Parakeet TDT 0.6B v3) |
+| Speech-to-text (25 European languages, language forced) | [NVIDIA Canary-1B-v2](https://huggingface.co/nvidia/canary-1b-v2) on your machine, or Google Gemini (better on real voices, the sound leaves your machine) with Canary as backup |
+| Follows the players from channel to channel | a second bot joins when the group splits up |
+| Keeps going when an AI service stops answering | the next one in your list takes over (another model, key or provider) |
 | Saves everything (SQLite), exports to JSON lines | built in |
 | You talk to it with a wake word ("Hector, ...") | any OpenAI-compatible LLM; tested with [llama.cpp](https://github.com/ggml-org/llama.cpp) + Qwen3.5-4B |
 | Every action is confirmed out loud first | "yes" / "no" from the same person |
 | It talks back | your audio files first, then [Phonon](https://github.com/gradium-ai/xn-ptts) (best French voice), or [Piper](https://github.com/OHF-Voice/piper1-gpl) automatically |
 | Degraded mode | LLM down → says so once, keeps listening and saving, stops acting |
-| Plugins: your code reacts to sentences and adds voice actions | see [Write a plugin](#write-a-plugin) |
+| Plugins: your code reacts to sentences, adds voice actions and its own web API | see [Write a plugin](#write-a-plugin) |
+| Knows what is new | it reads the latest entries of [CHANGELOG.md](CHANGELOG.md) when asked |
 
 ## ⚠️ Privacy first
 
@@ -29,6 +32,7 @@ This bot writes down what people say. That is personal data, and in many countri
 - Keep a nickname that says the bot is recording (the example config does).
 - People who say no: put their UID in `privacy.opt_out_uids`, their voice is then ignored completely.
 - Whispers are never recorded. Audio is never saved, only the text.
+- With `[stt] engine = "gemini"`, the sound of each sentence is sent to Google to be written down. Keep the default (Canary, on your machine) if that is not OK for your group.
 
 ## How it works (short version)
 
@@ -162,8 +166,9 @@ The bot comes with a lightweight, offline management site styled like the TeamSp
 - **Accessible & Responsive**: Conforms to WCAG 2.2 AA standards (accessible contrast ratios, full keyboard navigation, skip link, visible focus rings, ARIA live announcements and dialog landmarks), and adapts smoothly down to 360 px viewports without horizontal scrolling. Any disabled button clearly explains why it cannot be used upon click or hover.
 - **Self-contained & offline**: Built with native JavaScript, CSS, and Python standard library only. No external frameworks, build tools, or CDN dependencies are needed.
 - **Log in** by picking your TeamSpeak nickname: the bot sends you a 6-digit code in a private TeamSpeak message. No password to remember.
-- **Everyone** sees the sentences the bot transcribed from their own voice, and the list of voice actions.
-- **Admins** (members of the server groups in `[web] admin_groups`, or the UIDs in `admin_uids`) also get: a live view of the channel, settings with explanations, identities and people not to transcribe, plugins, statistics, the bot's log, and a box to make the bot say something.
+- **Everyone** reads the conversation they could hear (only while they were in the bot's channel, headset on), their own sentences, the statistics and the voice actions, and can stop being transcribed.
+- **Admins** (members of the server groups in `[web] admin_groups`, or the UIDs in `admin_uids`) also get: a live view of the channel, settings with explanations, identities (who is who), plugins, the bot's log, and a box to make the bot say something. They read the conversation under the same rule as everyone: not in the channel, nothing to read.
+- **Plugins** can offer their own API on the site: `/api/plugin/<module>/<path>` (see [docs/PLUGIN_CONTRACT.md](docs/PLUGIN_CONTRACT.md), "Site").
 - Settings changed on the site are saved in `data/settings.json`, on top of `config.toml`. The **Appliquer** button restarts the bot (about a minute) so it uses them.
 - The site is meant for your home network only: do not open port 8095 on your router.
 
@@ -197,6 +202,8 @@ docker compose exec tsbot python -m tsbot export > archive.jsonl
 
 NVIDIA Canary-1B-v2 understands 25 European languages; `[stt] language` forces yours, so short sounds ("euh", "ouais", laughs) are not turned into English words, which Parakeet TDT 0.6B v3 (the other choice, it guesses the language) often does. About 0.4 s per sentence on an Intel i5-1135G7; the whole bot uses about 1.8 GB of RAM. It cannot be taught nicknames: if a name keeps coming out wrong, the LLM usually still matches it to the right person (it corrected "Bobe" to "Bob" in our tests).
 
+Google Gemini (`engine = "gemini"`, key from [Google AI Studio](https://aistudio.google.com/)) was better on our real voices: on 18 sentences compared side by side, it got 7 right that Canary got wrong (calls to the bot, English words), Canary 2 (tiny sounds). It is given the names of the people so it spells them right. Canary stays loaded as the backup when Gemini fails, and `gemini_fallbacks` lists other Gemini models to try first. Text that nobody could say in the sound's time (a model inventing words on a short noise) is dropped.
+
 ## Write a plugin
 
 A plugin is a Python file with a class named `Plugin`, in the `plugins/` folder. The simplest one reacts to every sentence:
@@ -229,7 +236,7 @@ Restart the bot (`docker compose restart`). If a plugin crashes, the error is lo
 
 - **`Unknown argument … client_is_streaming` in the logs**: harmless, these are TeamSpeak 6 features the bot does not use.
 - **`Phonon unavailable, using Piper instead`**: normal until you set up [a better voice](#a-better-voice-optional).
-- **The bot does not react to "Hector"**: check the logs. If the transcription shows another word, choose a different wake word, or add the misheard spelling to `wake_words`.
+- **The bot does not react to its name**: check the logs. If the transcription shows another word, the name itself is the problem: pick one the speech model writes right every time (test it), rather than adding misheard spellings. A name that becomes a common word once its first sound is lost ("toptop" → "top") is easily missed.
 - **The bot cannot speak in the channel**: the channel may require talk power. Give the bot's server group enough talk power.
 - **Server groups show up as numbers**: give the bot's server group the permission to list server groups (`b_virtualserver_servergroup_list`).
 - **The bot cannot connect**: check the address and the password in `.env`, and that UDP port 9987 is reachable from the machine running the bot.
