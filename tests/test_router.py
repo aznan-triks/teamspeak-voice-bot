@@ -229,11 +229,9 @@ class RouterTest(unittest.TestCase):
                       "C'est un PD botop ou quoi": True}
         for text, called in heard_live.items():
             self.assertEqual(bool(router.wake.search(text)), called, text)
-        router = Router({"wake_words": ["toptop", "top-top", "top top", "^oktobre"]}, FakeLLM(), self.bot, [])
+        router = Router({"wake_words": ["toptop", "top-top", "top top"]}, FakeLLM(), self.bot, [])
         heard = {"Top, top.": True, "Top top, t'es là ?": True, "Toptop, réponds": True, "Allô, top-top": True,
-                 "C'est top, top du top": False, "Elle est top. Top.": False,
-                 "Oktobre, est-ce que t'es gay?": True, "On part en oktobre.": False}  # "Oktobre": heard live
-        self.assertNotIn("^oktobre", router.wake_words)  # the LLM is told the plain word
+                 "C'est top, top du top": False, "Elle est top. Top.": False}
         for text, called in heard.items():
             self.assertEqual(bool(router.wake.search(text)), called, text)
 

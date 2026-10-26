@@ -229,9 +229,8 @@ def run(cfg: dict, logs=None) -> None:
             except Exception:
                 ctx = {}
             found += [n for v in ctx.values() if isinstance(v, list) for n in v if isinstance(n, str)]
-        # One-word wake words only: "beau top" made "c'est au top" sound like the bot's name; "^octobre" (start
-        # of a sentence only) would turn every "octobre" into the name.
-        wake = [w for w in cfg.get("llm", {}).get("wake_words", []) if " " not in w.strip() and not w.startswith("^")]
+        # One-word wake words only: "beau top" made "c'est au top" sound like the bot's name.
+        wake = [w for w in cfg.get("llm", {}).get("wake_words", []) if " " not in w.strip()]
         return found + wake + cfg.get("stt", {}).get("vocabulary", [])
 
     transcribe.names = names

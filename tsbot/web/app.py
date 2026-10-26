@@ -92,7 +92,7 @@ FIELDS = [
     ("stt", "language", "str", "Langue parlée", "Code de langue imposé à Canary, par exemple fr. Ignoré par Parakeet."),
     ("stt", "min_utterance_ms", "int", "Durée minimale d'une phrase (ms)", "Les sons plus courts (toux, clics) sont ignorés."),
     ("llm", "enabled", "bool", "Le bot répond et agit", "Désactivé : il transcrit et archive seulement."),
-    ("llm", "wake_words", "list", "Mots d'éveil", "Mots qui réveillent le bot (son nom, au début de la phrase). Teste-les : la transcription doit les écrire juste. Un par ligne. Avec ^ devant (^octobre) : une déformation fréquente du nom, comptée seulement en début de phrase."),
+    ("llm", "wake_words", "list", "Mots d'éveil", "Mots qui réveillent le bot (son nom, au début de la phrase). Teste-les : la transcription doit les écrire juste. Un par ligne."),
     ("llm", "personality", "text", "Personnalité", "Comment le bot parle et se comporte : son caractère, son humour, ce qu'il aime. Il suit ce texte pour le ton, jamais pour enfreindre ses règles."),
     ("follow", "enabled", "bool", "Suivre les joueurs", "Le bot va dans le salon où sont le plus de joueurs déclarés (page Identités). Si des joueurs se séparent, un deuxième bot vient dans l'autre salon, puis repart quand ils se retrouvent."),
     ("follow", "nickname_2", "str", "Pseudo du deuxième bot", "Garde « (enregistrement) » : les gens doivent savoir qu'il écoute."),
