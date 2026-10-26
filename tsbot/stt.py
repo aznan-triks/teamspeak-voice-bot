@@ -217,7 +217,9 @@ class Transcriber:
         system = ("Transcris mot pour mot ce qui est dit dans l'audio, en français parlé familier tel quel (argot, verlan, "
                   "phrases coupées), sans corriger, résumer ni répondre. Réponds uniquement par la transcription, "
                   "ou par une réponse vide si rien d'intelligible n'est dit."
-                  + (f" Noms, pseudos et mots qui peuvent être prononcés : {names}." if names else ""))
+                  # Live: on unclear sounds it answered a lone name from this list ("Oui." → "Alice", then "Ilker").
+                  + (f" Orthographe des noms, pseudos et mots du groupe, à utiliser seulement s'ils sont vraiment dits "
+                     f"(n'écris jamais un nom de cette liste que tu n'entends pas) : {names}." if names else ""))
         audio = {"type": "input_audio", "input_audio": {"data": base64.b64encode(buf.getvalue()).decode(), "format": "wav"}}
         reply = self.cloud.request_chat([{"role": "system", "content": system}, {"role": "user", "content": [audio]}])
         return reply.strip().strip('"').strip()
