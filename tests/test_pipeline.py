@@ -65,6 +65,27 @@ class PipelineTest(unittest.TestCase):
         self.assertEqual(rows[1]["server_groups"], ["Guest", "Modo"])
         self.assertEqual((rows[0]["duration_ms"], rows[0]["identity"], rows[0]["text"]), (1000, "Alice", "bonjour"))
 
+    def test_opting_out_on_the_site_applies_at_once(self):
+        import os
+        import tempfile
+
+        settings = os.path.join(tempfile.mkdtemp(), "settings.json")
+
+        class Stream(io.BytesIO):
+            lines = 0
+
+            def readline(self, *a):
+                Stream.lines += 1
+                if Stream.lines == 2:  # Alice opts out on the site between her two sentences
+                    with open(settings, "w", encoding="utf-8") as f:
+                        json.dump({"privacy": {"opt_out_uids": ["alice="]}}, f)
+                return super().readline(*a)
+
+        archive = Archive(":memory:")
+        serve(Stream(frame("utterance", ALICE, ms=1000) + frame("utterance", ALICE, ms=1000)), lambda pcm: "salut",
+              archive, [], {**CFG, "web": {"settings_file": settings}})
+        self.assertEqual(archive.export_jsonl(io.StringIO()), 1)
+
     def test_short_merci_is_noise(self):
         stream = io.BytesIO(frame("utterance", ALICE, ms=700) + frame("utterance", ALICE, ms=2000))
         archive = Archive(":memory:")

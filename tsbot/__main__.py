@@ -58,7 +58,18 @@ def serve(stream, transcribe, archive: Archive, loaded: list, cfg: dict, bot=Non
     lock = lock or threading.Lock()
     stt = cfg.get("stt", {})
     opt_out = set(cfg.get("privacy", {}).get("opt_out_uids", []))
+    settings = cfg.get("web", {}).get("settings_file", "data/settings.json")
+    seen = os.path.getmtime(settings) if os.path.exists(settings) else 0
     for header, pcm in read_frames(stream):
+        # Someone who opts out on the site is not transcribed one sentence more, without a restart.
+        if header["event"] == "utterance" and os.path.exists(settings) and os.path.getmtime(settings) != seen:
+            seen = os.path.getmtime(settings)
+            try:
+                with open(settings, encoding="utf-8") as f:
+                    # shortcut: only adds people; someone who opts back in is heard again after a restart.
+                    opt_out |= set(json.load(f).get("privacy", {}).get("opt_out_uids", []))
+            except (OSError, ValueError):
+                log.exception("settings file unreadable: opt-out list kept as it was")
         raw = header.get("speaker", {})
         if header["event"] == "clients" and bot is not None and bot.me is not None:
             own = next((c for c in header.get("clients", []) if c.get("client_id") == bot.me.client_id), None)
