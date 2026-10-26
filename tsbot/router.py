@@ -108,10 +108,12 @@ class Router:
             return
         same = self.pending is not None and self.pending["action"].requested_by.uid == t.speaker.uid
         addressed = self.addressed = bool(self.wake.search(t.text))
-        # A plain "oui"/"non" settles it at once; "Non Hector, plutôt deux points" goes to the LLM.
-        if same and not addressed and YES.match(t.text):
+        # A plain "oui"/"non" settles it at once; "Non Hector, plutôt deux points" goes to the LLM, and so does a
+        # longer answer: live, "Non, pas un point, mets-en plus" cancelled the action instead of changing it.
+        short = len(t.text.split()) <= self.cfg.get("yes_no_max_words", 3)
+        if same and not addressed and short and YES.match(t.text):
             return self._finish(True)
-        if same and not addressed and NO.match(t.text):
+        if same and not addressed and short and NO.match(t.text):
             return self._finish(False)
         if addressed:
             plugins.dispatch(self.loaded, "on_command", t)
@@ -241,10 +243,12 @@ class Router:
         p = self.pending
         try:
             result = p["plugin"].execute(p["action"])
-        except Exception:
+        except Exception as error:
             log.exception("action %s failed", p["action"].name)
-            self._close("failed")
+            self._close("failed", str(error))
             self.bot.say("failed")
+            # The real reason, for when it is asked why: live, it made one up ("a hundred points is too much").
+            self.bot._remember(f"[{self.bot.me.nickname if self.bot.me else 'bot'}] (raison de l'échec : {error})")
             return
         self._close("done", result)
         if result:

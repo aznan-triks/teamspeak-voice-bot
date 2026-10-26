@@ -116,6 +116,29 @@ class RouterTest(unittest.TestCase):
         self.assertEqual(self.voice.said, ["Un point pour Bob, je valide ?", "C'est fait."])
         self.assertEqual(self.statuses(), ["done"])
 
+    def test_a_correction_starting_with_no_is_not_a_cancel(self):
+        # Live: "Non, pas un point, mets-en plus" cancelled the action instead of changing it.
+        more = dict(PROPOSE, args={"player": "Bob", "points": 5}, confirm_text="Cinq points pour Bob, je valide ?")
+        llm = FakeLLM(PROPOSE, more)
+        self.setup(llm)
+        self.hear(ALICE, "jarvis un point pour Bob")
+        self.hear(ALICE, "Non, pas un point, mets-en plus")
+        self.assertEqual((llm.calls, self.voice.said[-1]), (2, "Cinq points pour Bob, je valide ?"))
+        self.assertEqual(self.statuses(), ["replaced", "proposed"])
+
+    def test_the_bot_remembers_why_an_action_failed(self):
+        class Down(Scores):
+            def execute(self, action):
+                raise RuntimeError("mot de passe requis")
+
+        self.setup(FakeLLM(PROPOSE))
+        self.router.loaded = [Down()]
+        self.router.start(now=0)
+        self.hear(ALICE, "jarvis un point pour Bob")
+        self.hear(ALICE, "oui")
+        self.assertEqual(self.bot.window[-1], "[Jarvis] (raison de l'échec : mot de passe requis)")
+        self.assertEqual(self.statuses(), ["failed"])
+
     def test_no_cancels_and_silence_expires(self):
         self.setup(FakeLLM(PROPOSE, PROPOSE))
         self.hear(ALICE, "jarvis un point pour Bob")
