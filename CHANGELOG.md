@@ -4,12 +4,13 @@ Newest first. The bot reads the "Plain words" lines of the latest versions, so i
 
 ## 0.3.0 — 2026-10-26
 
-**Plain words:** The bot hears better (Google Gemini writes most sentences), always answers when you call it, knows what it is and how it works, sees when people talk over each other, and the site has a real space for players.
+**Plain words:** The bot hears better (Google Gemini writes most sentences), always answers when you call it, knows what it is and how it works, sees when people talk over each other, keeps going when an AI service stops answering, can tell what is new, and the site has a real space for players.
 
 **Technical:**
 - Speech-to-text: Gemini (`engine = "gemini"`) for sentences of 1.2 s or more, the local Canary model for short sounds and when Gemini fails; chosen on 18 real sentences compared side by side (`compare_model`). 300 ms of silence around each sentence for the local model; transcription loops cut; Silero keeps 250 ms around speech.
 - Conversation: called by name it never stays silent; a reply to its own question needs no name; "non, mets-en plus" changes the action instead of cancelling it; the real reason of a failed action is kept; overlapping speech is marked "[Alice, en même temps que Bob]"; the prompt says what the bot is, which models it runs, and what it keeps.
 - Site: player space (stats, opt-out applied at once); names and "make the bot speak" stay with admins; correct "you are in the bot's channel" check; plugin API `/api/plugin/<module>/<path>` (`docs/PLUGIN_CONTRACT.md`, "Site"); lines with what people said never reach the log pages.
+- AI services: when one stops answering (quota, overload, outage), the next of `fallbacks` / `gemini_fallbacks` takes over; a failing one rests 60 s, doubling each time. The bot reads its own changelog (latest "Plain words") to tell what is new.
 - Bridge: reports each channel's name and voice quality.
 - Checked with 63 unit tests (also run inside the Docker image) and live on the NUC; not checked: overlap marking on a busy channel.
 
