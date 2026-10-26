@@ -168,7 +168,14 @@ class Router:
         elif kind == "propose":
             self._propose(reply, t, now, asked, spoken_to)
         elif kind == "confirm" and same:
-            self._finish(reply.get("decision") == "oui")
+            # The LLM may cancel, but a "yes" needs a word of agreement in the line: live, "Mais top-top, je viens
+            # de te dire de varier les points" was read as a yes and the action ran.
+            if reply.get("decision") != "oui":
+                self._finish(False)
+            elif re.search(r"\b(oui|ouais|yes|vas-y|valide|confirme|d'accord|ok|go)\b", t.text, re.I):
+                self._finish(True)
+            else:
+                log.info("confirmation without a word of agreement: not taken as a yes")
 
     def user_message(self, note: str = "") -> str:
         """What the LLM gets besides the system prompt: actions, context, pending action, recent lines."""

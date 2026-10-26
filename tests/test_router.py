@@ -126,6 +126,15 @@ class RouterTest(unittest.TestCase):
         self.assertEqual((llm.calls, self.voice.said[-1]), (2, "Cinq points pour Bob, je valide ?"))
         self.assertEqual(self.statuses(), ["replaced", "proposed"])
 
+    def test_a_protest_is_never_taken_as_a_yes(self):
+        llm = FakeLLM(PROPOSE, {"type": "confirm", "decision": "oui"}, {"type": "confirm", "decision": "oui"})
+        self.setup(llm)
+        self.hear(ALICE, "jarvis un point pour Bob")
+        self.hear(ALICE, "Mais jarvis, je viens de te dire de varier les points")  # live: the LLM said "oui"
+        self.assertEqual((self.plugin.done, self.statuses()), ([], ["proposed"]))
+        self.hear(ALICE, "Jarvis, ouais vas-y c'est bon")
+        self.assertEqual(self.plugin.done, [{"player": "Bob", "points": 1}])
+
     def test_the_bot_remembers_why_an_action_failed(self):
         class Down(Scores):
             def execute(self, action):
