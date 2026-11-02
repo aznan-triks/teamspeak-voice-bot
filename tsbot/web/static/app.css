@@ -461,20 +461,20 @@ legend { font-size: 16px; font-weight: 700; color: var(--strong); padding: 0; ma
 @keyframes spin { to { transform: rotate(360deg); } }
 
 .guide-card {
-  background: var(--panel-2);
-  border-left: 4px solid var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, var(--panel));
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--line));
 }
 .hearing {
   margin: 0 0 var(--space-3);
   padding: 8px 12px;
+  border: 1px solid var(--line);
   border-radius: var(--radius-s);
   font-size: 14px;
-  border-left: 3px solid var(--muted);
   background: var(--panel-2);
   word-break: break-word;
 }
-.hearing.on { border-left-color: var(--talk); }
-.hearing.off { border-left-color: var(--warn); }
+.hearing.on { border-color: color-mix(in srgb, var(--talk) 50%, var(--line)); }
+.hearing.off { border-color: color-mix(in srgb, var(--warn) 50%, var(--line)); }
 .lamp-dot.on { background: var(--talk); }
 .lamp-dot.down { background: var(--bad); }
 
@@ -628,8 +628,7 @@ legend { font-size: 16px; font-weight: 700; color: var(--strong); padding: 0; ma
   transform: translateX(-50%);
   background: var(--panel-2);
   color: var(--strong);
-  border: 1px solid var(--edge);
-  border-left: 4px solid var(--talk);
+  border: 1px solid color-mix(in srgb, var(--talk) 50%, var(--edge));
   padding: 12px 20px;
   border-radius: var(--radius-l);
   font-weight: 600;
@@ -639,7 +638,7 @@ legend { font-size: 16px; font-weight: 700; color: var(--strong); padding: 0; ma
   z-index: 1000;
   animation: slide-up 0.2s ease;
 }
-.toast.error { border-left-color: var(--bad); }
+.toast.error { border-color: color-mix(in srgb, var(--bad) 50%, var(--edge)); }
 @keyframes slide-up {
   from { opacity: 0; transform: translate(-50%, 10px); }
   to { opacity: 1; transform: translate(-50%, 0); }
