@@ -550,6 +550,20 @@ legend { font-size: 16px; font-weight: 700; color: var(--strong); padding: 0; ma
 .kvs { display: grid; gap: var(--space-2); }
 .kv { display: grid; grid-template-columns: minmax(8rem, 14rem) 1fr; gap: var(--space-2); align-items: center; }
 
+/* Settings: search and section jumps */
+.tools { display: grid; gap: var(--space-3); margin-bottom: var(--space-4); }
+.jump { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.chip-btn {
+  border: 1px solid var(--edge);
+  background: var(--panel);
+  color: var(--text);
+  border-radius: var(--radius-round);
+  padding: 4px 12px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.chip-btn:hover { border-color: var(--menu-text); color: var(--strong); }
+
 /* Statistics Bars */
 .bars { display: grid; gap: var(--space-2); }
 .bar {

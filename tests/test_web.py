@@ -158,6 +158,13 @@ class WebTest(unittest.TestCase):
         self.assertIn("error", self.call(admin, "POST", "/api/settings", {"fields": {"teamspeak.bridge_binary": "evil"}}))
         self.assertIn("error", self.call(admin, "POST", "/api/settings", {"identities": {"bob": "Bob"}}))
 
+    def test_new_options_show_the_bot_default_and_accept_negative_levels(self):
+        admin = self.login(ADMIN)
+        level = lambda s: next(f for f in s["fields"] if (f["section"], f["key"]) == ("stt", "min_level_db"))["value"]
+        self.assertEqual(level(self.call(admin, "GET", "/api/settings")), -100)  # the bot's default, not an empty box
+        self.assertEqual(level(self.call(admin, "POST", "/api/settings", {"fields": {"stt.min_level_db": -45}})), -45)
+        self.assertIn("error", self.call(admin, "POST", "/api/settings", {"fields": {"stt.min_level_db": "fort"}}))
+
     def test_services_are_limited_to_the_configured_ones(self):
         admin = self.login(ADMIN)
         self.app.services = ["llm", "web"]

@@ -91,10 +91,19 @@ FIELDS = [
     ("stt", "api_key", SECRET, "Clé API Gemini pour la transcription", "Clé Google AI Studio (aistudio.google.com). Vide = la même que celle des réponses."),
     ("stt", "language", "str", "Langue parlée", "Code de langue imposé à Canary, par exemple fr. Ignoré par Parakeet."),
     ("stt", "min_utterance_ms", "int", "Durée minimale d'une phrase (ms)", "Les sons plus courts (toux, clics) sont ignorés."),
+    ("stt", "min_level_db", "sint", "Niveau minimal d'une voix (dB)", "Les sons plus faibles sont ignorés (bruits de clavier, souffle). Une voix est vers −32 dB. −100 = désactivé."),
+    ("stt", "gemini_min_ms", "int", "Durée minimale pour Gemini (ms)", "Les sons plus courts restent sur le NUC : Gemini invente parfois un nom sur un son très bref."),
+    ("stt", "noise_phrases", "list", "Phrases de bruit", "Ce que le modèle écrit pour un petit bruit (un rire, une toux). Ignorées si la phrase est courte. Une par ligne."),
+    ("stt", "noise_max_ms", "int", "Durée max d'un bruit (ms)", "Au-delà de cette durée, une phrase « Merci. » est gardée."),
     ("llm", "enabled", "bool", "Le bot répond et agit", "Désactivé : il transcrit et archive seulement."),
+    ("llm", "json_mode", "bool", "Réponse en JSON strict", "Demande au LLM une réponse JSON stricte. Désactive-le seulement si le fournisseur refuse ce format."),
+    ("llm", "follow_up_min_words", "int", "Mots minimum pour poursuivre sans le nom", "Une réplique plus courte (« Merci. », « Ah. ») a besoin du nom du bot, même pendant la poursuite."),
     ("llm", "wake_words", "list", "Mots d'éveil", "Mots qui réveillent le bot (son nom, au début de la phrase). Teste-les : la transcription doit les écrire juste. Un par ligne."),
     ("llm", "personality", "text", "Personnalité", "Comment le bot parle et se comporte : son caractère, son humour, ce qu'il aime. Il suit ce texte pour le ton, jamais pour enfreindre ses règles."),
     ("follow", "enabled", "bool", "Suivre les joueurs", "Le bot va dans le salon où sont le plus de joueurs déclarés (page Identités). Si des joueurs se séparent, un deuxième bot vient dans l'autre salon, puis repart quand ils se retrouvent."),
+    ("follow", "max_bots", "int", "Nombre de bots suiveurs", "1 à 2 : le deuxième bot ne vient que si les joueurs se séparent."),
+    ("follow", "move_after_s", "int", "Délai avant de suivre (s)", "Les joueurs doivent rester ce temps dans un autre salon avant que le bot les suive (évite les allers-retours)."),
+    ("follow", "stop_after_s", "int", "Délai avant que le 2e bot parte (s)", "Le deuxième bot repart ce temps après que les joueurs se sont retrouvés."),
     ("follow", "nickname_2", "str", "Pseudo du deuxième bot", "Garde « (enregistrement) » : les gens doivent savoir qu'il écoute."),
     ("llm", "follow_up_s", "int", "Temps pour poursuivre la conversation (s)", "Après une réponse du bot, on peut continuer à lui parler sans redire son nom pendant ce temps. 0 = toujours dire son nom."),
     ("llm", "watch_for_actions", "bool", "Proposer des points sans qu'on l'appelle", "Le bot écoute tout et parle de lui-même seulement pour proposer une action (« Bob a gagné » → un point ?), jamais pour discuter. Chaque phrase part alors au LLM : seulement avec un LLM rapide (DeepSeek : 1 s, quelques centimes par soirée)."),
@@ -119,6 +128,20 @@ FIELDS = [
     ("web", "admin_groups", "list", "Grades administrateurs du site", "Grades TeamSpeak dont les membres administrent ce site. Un par ligne."),
     ("web", "admin_uids", "list", "Administrateurs supplémentaires (UID)", "Identifiants TeamSpeak administrateurs même sans le grade. Un par ligne."),
 ]
+
+
+# Values the bot uses when the config does not set them: shown in the form instead of an empty box.
+DEFAULTS = {
+    "stt.min_level_db": -100,
+    "stt.gemini_min_ms": 900,
+    "stt.noise_phrases": ["merci"],
+    "stt.noise_max_ms": 1500,
+    "llm.json_mode": True,
+    "llm.follow_up_min_words": 3,
+    "follow.max_bots": 2,
+    "follow.move_after_s": 3,
+    "follow.stop_after_s": 60,
+}
 
 
 def get_path(cfg: dict, dotted: str) -> dict:
@@ -453,9 +476,9 @@ class App:
                     "type": t,
                     "label": tr(f"field.{s}.{k}.label", lang) if tr(f"field.{s}.{k}.label", lang) != f"field.{s}.{k}.label" else label,
                     "help": tr(f"field.{s}.{k}.help", lang) if tr(f"field.{s}.{k}.help", lang) != f"field.{s}.{k}.help" else h,
-                    "value": (MASK if get_path(cfg, s).get(k) else "") if t == SECRET else get_path(cfg, s).get(k),
+                    "value": (MASK if get_path(cfg, s).get(k) else "") if t == SECRET else get_path(cfg, s).get(k, DEFAULTS.get(f"{s}.{k}")),
                     **({"type": "choice:" + ",".join(["default", *self.voice_names()])} if t == "voice" else {}),
-                    "default": DEFAULT_PHRASES.get(k) if s == "voice.phrases" else None,
+                    "default": DEFAULTS.get(f"{s}.{k}", DEFAULT_PHRASES.get(k) if s == "voice.phrases" else None),
                 }
                 for s, k, t, label, h in FIELDS
             ],
@@ -527,6 +550,8 @@ class App:
         if kind == "bool" and isinstance(value, bool):
             return value
         if kind == "int" and isinstance(value, int) and not isinstance(value, bool) and value >= 0:
+            return value
+        if kind == "sint" and isinstance(value, int) and not isinstance(value, bool):
             return value
         if kind in ("str", "text") and isinstance(value, str):
             return value.strip()

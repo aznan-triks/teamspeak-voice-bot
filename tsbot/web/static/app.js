@@ -94,6 +94,18 @@ function confirmBox(text, okLabel = null) {
   return new Promise((resolve) => d.addEventListener("close", () => resolve(d.returnValue === "ok"), { once: true }));
 }
 
+// Automatic refresh switch and button; the switch's state is remembered in this browser only.
+const refreshBar = () => `<div class="row"><label class="switch"><input type="checkbox" id="auto"><span>${esc(t("refresh.auto"))}</span></label><button class="btn ghost" id="refresh">${esc(t("refresh.now"))}</button></div>`;
+function autoRefresh(page, draw, ms, defaultOn) {
+  let saved = null;
+  try { saved = localStorage.getItem(`auto.${page}`); } catch (e) {}
+  const box = $("#auto");
+  box.checked = saved === null ? defaultOn : saved === "1";
+  box.onchange = () => { try { localStorage.setItem(`auto.${page}`, box.checked ? "1" : "0"); } catch (e) {} };
+  $("#refresh").onclick = draw;
+  timer = setInterval(() => { if (box.checked) draw(); }, ms);
+}
+
 // Tooltip for disabled reason explaining WHY a control cannot be activated
 const tooltipEl = $("#tooltip");
 function showTooltip(target, text) {
@@ -248,11 +260,25 @@ async function applyNow() {
   $("#banner").hidden = true;
 }
 
+// A page with unsaved changes sets leaveGuard: leaving it asks first.
+let leaveGuard = null;
+let currentPage = null;
+
+async function navigate() {
+  if (leaveGuard?.() && !(await confirmBox(t("settings.leave_confirm"), t("settings.leave_btn")))) {
+    history.replaceState(null, "", `#/${currentPage}`);
+    return;
+  }
+  show();
+}
+
 async function show() {
   clearInterval(timer);
+  leaveGuard = null;
   const home = me?.admin ? "live" : "conversation";
   const id = location.hash.replace("#/", "") || home;
   const page = PAGES[id] && (!PAGES[id].admin || me?.admin) ? id : home;
+  currentPage = page;
   document.querySelectorAll("#rail a[data-page]").forEach((a) => (a.dataset.page === page ? a.setAttribute("aria-current", "page") : a.removeAttribute("aria-current")));
   document.title = `${t(PAGES[page].key)} — ${BOT}`;
   $("#rail").classList.remove("open");
@@ -277,7 +303,8 @@ async function pageLogin() {
     <div class="panel stack" id="login-box"><div class="loading-state"><span class="spinner" aria-hidden="true"></span><p class="muted">${esc(t("login.searching"))}</p></div></div>
   </section>`;
   const box = $("#login-box");
-  const choose = async () => {
+  let listKey = null; // the list last drawn: redrawn only when it changes, so an open dropdown stays open
+  const choose = async (force = false) => {
     let people;
     try {
       people = await api("/api/login/clients");
@@ -289,6 +316,9 @@ async function pageLogin() {
       box.innerHTML = `<div class="empty-state"><p>${esc(t("login.empty"))}</p></div>`;
       return;
     }
+    const key = JSON.stringify(people);
+    if (!force && key === listKey && $("#who")) return;
+    listKey = key;
     const picked = $("#who")?.value;
     box.innerHTML = `
       <div class="field">
@@ -332,7 +362,7 @@ async function pageLogin() {
         if (found) go();
       };
       $("#again").onclick = () => send(id, name);
-      $("#other").onclick = () => { choose(); timer = setInterval(choose, 5000); };
+      $("#other").onclick = () => { choose(true); timer = setInterval(choose, 5000); };
     } catch (e) {
       toast(e.message, true);
     }
@@ -559,6 +589,7 @@ async function pageServices() {
   main.innerHTML = `
     <h1>${esc(t("services.title"))}</h1>
     <p class="lede">${esc(t("services.lede", { bot: BOT }))}</p>
+    <div style="margin-bottom:12px">${refreshBar()}</div>
     <div id="services" class="stack"><div class="loading-state"><span class="spinner" aria-hidden="true"></span></div></div>`;
   const openLogs = new Set();
   const draw = async () => {
@@ -622,13 +653,14 @@ async function pageServices() {
     });
   };
   await draw();
-  timer = setInterval(draw, 5000);
+  autoRefresh("services", draw, 5000, false); // off by default: the redraw would swallow a click
 }
 
 async function pageLive() {
   main.innerHTML = `
     <h1>${esc(t("live.title"))}</h1>
     <p class="lede">${esc(t("live.lede"))}</p>
+    <div style="margin-bottom:12px">${refreshBar()}</div>
     <dl class="facts" id="facts"><div class="loading-state"><span class="spinner" aria-hidden="true"></span></div></dl>
     <div class="split">
       <section class="panel">
@@ -669,7 +701,7 @@ async function pageLive() {
       : `<li class="muted">${esc(t("live.channel_empty"))}</li>`;
   };
   await draw();
-  timer = setInterval(draw, 2000);
+  autoRefresh("live", draw, 2000, true);
 }
 
 async function pageSpeak() {
@@ -708,8 +740,7 @@ async function pageSpeak() {
       }
       const player = $("#player");
       player.src = URL.createObjectURL(await r.blob());
-      player.hidden = false;
-      player.play();
+      player.hidden = false; // no autoplay: the listener presses play
     } finally {
       updateButtons();
     }
@@ -757,7 +788,7 @@ async function pageSettings() {
     else if (f.type === "text") ctrl = `<textarea id="${id}" rows="5" aria-describedby="${id}-help">${esc(v ?? "")}</textarea>`;
     else if (f.type.startsWith("choice:")) ctrl = `<select id="${id}" aria-describedby="${id}-help">${f.type.slice(7).split(",").map((o) => `<option ${o === v ? "selected" : ""}>${esc(o)}</option>`).join("")}</select>`;
     else if (f.type === "secret") ctrl = `<input id="${id}" type="password" autocomplete="new-password" value="${esc(v ?? "")}" placeholder="${esc(t("settings.none_placeholder"))}" aria-describedby="${id}-help">`;
-    else ctrl = `<input id="${id}" type="${f.type === "int" ? "number" : "text"}" ${f.type === "int" ? 'min="0"' : ""} value="${esc(v ?? "")}" placeholder="${esc(f.default ?? "")}" aria-describedby="${id}-help">`;
+    else ctrl = `<input id="${id}" type="${f.type.endsWith("int") ? "number" : "text"}" ${f.type === "int" ? 'min="0"' : ""} value="${esc(v ?? "")}" placeholder="${esc(f.default ?? "")}" aria-describedby="${id}-help">`;
     return `
       <div class="field" data-key="${f.section}.${f.key}" data-type="${f.type}">
         <label for="${id}">${esc(f.label)}</label>
@@ -766,12 +797,20 @@ async function pageSettings() {
       </div>`;
   };
 
+  const secId = (sec) => `sec-${sec.replace(/\./g, "-")}`;
   main.innerHTML = `
     <h1>${esc(t("settings.title"))}</h1>
     <p class="lede">${esc(t("settings.lede"))}</p>
+    <div class="tools">
+      <input type="search" id="find" placeholder="${esc(t("settings.search"))}" aria-label="${esc(t("settings.search"))}">
+      <nav class="jump" aria-label="${esc(t("settings.jump_label"))}">
+        ${Object.keys(groups).map((sec) => `<button type="button" class="chip-btn" data-jump="${secId(sec)}">${esc(getSectionTitle(sec))}</button>`).join("")}
+      </nav>
+    </div>
+    <p id="no-results" class="empty" hidden>${esc(t("settings.no_results"))}</p>
     <form id="form" class="stack">
       ${Object.entries(groups).map(([sec, fields]) => `
-        <fieldset class="panel">
+        <fieldset class="panel" id="${secId(sec)}">
           <legend>${esc(getSectionTitle(sec))}</legend>
           ${fields.map(inputControl).join("")}
         </fieldset>`).join("")}
@@ -784,7 +823,7 @@ async function pageSettings() {
     const c = el.querySelector("input,textarea,select");
     const tp = el.dataset.type;
     if (tp === "bool") return c.checked;
-    if (tp === "int") return c.value === "" ? null : Number(c.value);
+    if (tp === "int" || tp === "sint") return c.value === "" ? null : Number(c.value);
     if (tp === "list") return c.value.split("\n").map((x) => x.trim()).filter(Boolean);
     return c.value;
   };
@@ -798,6 +837,22 @@ async function pageSettings() {
     saveBtn.disabled = count === 0;
     saveBtn.textContent = count ? t("settings.btn_save_changes", { count }) : t("settings.btn_save");
   };
+  leaveGuard = () => changed().length > 0;
+
+  $("#find").oninput = (e) => {
+    const query = e.target.value.trim().toLowerCase();
+    let shown = 0;
+    main.querySelectorAll("fieldset").forEach((set) => {
+      const hits = [...set.querySelectorAll(".field")].filter((el) => {
+        el.hidden = Boolean(query) && !el.textContent.toLowerCase().includes(query);
+        return !el.hidden;
+      }).length;
+      set.hidden = hits === 0;
+      shown += hits;
+    });
+    $("#no-results").hidden = shown > 0;
+  };
+  main.querySelectorAll("[data-jump]").forEach((b) => (b.onclick = () => $(`#${b.dataset.jump}`).scrollIntoView({ behavior: "smooth", block: "start" })));
 
   $("#form").onsubmit = async (e) => {
     e.preventDefault();
@@ -1084,6 +1139,8 @@ async function pageLogs() {
         <input type="checkbox" id="only">
         <span>${esc(t("logs.switch_errors_only"))}</span>
       </label>
+      <input type="search" id="find" placeholder="${esc(t("logs.search_placeholder"))}" aria-label="${esc(t("logs.search_placeholder"))}" style="max-width:240px">
+      ${refreshBar()}
       <button class="btn danger" id="restart" style="margin-left:auto">${esc(t("logs.btn_restart"))}</button>
     </div>
     <div class="logs" id="logs" tabindex="0" role="region" aria-label="${esc(t("logs.aria_label"))}"></div>`;
@@ -1092,7 +1149,8 @@ async function pageLogs() {
   const draw = () => {
     const box = $("#logs");
     const atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 40;
-    const rows = $("#only").checked ? all.filter((l) => l.level !== "INFO" && l.level !== "DEBUG") : all;
+    const query = $("#find").value.trim().toLowerCase();
+    const rows = all.filter((l) => (!$("#only").checked || (l.level !== "INFO" && l.level !== "DEBUG")) && (!query || l.text.toLowerCase().includes(query)));
     box.innerHTML = rows.map((l) => `<div class="${esc(l.level)}">${esc(l.text)}</div>`).join("") || `<span class="muted">${esc(t("logs.empty"))}</span>`;
     if (atBottom) box.scrollTop = box.scrollHeight;
   };
@@ -1109,13 +1167,14 @@ async function pageLogs() {
     }
   };
   $("#only").onchange = draw;
+  $("#find").oninput = draw;
   $("#restart").onclick = async () => {
     if (!(await confirmBox(t("logs.confirm_restart"), t("services.btn_restart")))) return;
     await api("/api/restart", {});
     toast(t("logs.restart_requested"));
   };
   await poll();
-  timer = setInterval(poll, 3000);
+  autoRefresh("logs", poll, 3000, true);
 }
 
 // ---- Event Listeners & Startup ----
@@ -1178,7 +1237,8 @@ document.addEventListener("keydown", (e) => {
   }
 
   drawRail();
-  window.addEventListener("hashchange", show);
+  window.addEventListener("hashchange", navigate);
+  window.addEventListener("beforeunload", (e) => { if (leaveGuard?.()) e.preventDefault(); });
   await show();
   refreshBanner();
   setInterval(refreshLamp, 3000);
