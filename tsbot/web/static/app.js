@@ -786,9 +786,10 @@ async function pageSettings() {
     }
     if (f.type === "list") ctrl = `<textarea id="${id}" aria-describedby="${id}-help">${esc((v || []).join("\n"))}</textarea>`;
     else if (f.type === "text") ctrl = `<textarea id="${id}" rows="5" aria-describedby="${id}-help">${esc(v ?? "")}</textarea>`;
+    else if (f.type === "json") ctrl = `<textarea id="${id}" rows="6" class="code" aria-describedby="${id}-help">${esc(JSON.stringify(v ?? [], null, 2))}</textarea>`;
     else if (f.type.startsWith("choice:")) ctrl = `<select id="${id}" aria-describedby="${id}-help">${f.type.slice(7).split(",").map((o) => `<option ${o === v ? "selected" : ""}>${esc(o)}</option>`).join("")}</select>`;
     else if (f.type === "secret") ctrl = `<input id="${id}" type="password" autocomplete="new-password" value="${esc(v ?? "")}" placeholder="${esc(t("settings.none_placeholder"))}" aria-describedby="${id}-help">`;
-    else ctrl = `<input id="${id}" type="${f.type.endsWith("int") ? "number" : "text"}" ${f.type === "int" ? 'min="0"' : ""} value="${esc(v ?? "")}" placeholder="${esc(f.default ?? "")}" aria-describedby="${id}-help">`;
+    else ctrl = `<input id="${id}" type="${/int$|float$/.test(f.type) ? "number" : "text"}" step="any" ${f.type === "int" ? 'min="0"' : ""} value="${esc(v ?? "")}" placeholder="${esc(f.default ?? "")}" aria-describedby="${id}-help">`;
     return `
       <div class="field" data-key="${f.section}.${f.key}" data-type="${f.type}">
         <label for="${id}">${esc(f.label)}</label>
@@ -823,8 +824,9 @@ async function pageSettings() {
     const c = el.querySelector("input,textarea,select");
     const tp = el.dataset.type;
     if (tp === "bool") return c.checked;
-    if (tp === "int" || tp === "sint") return c.value === "" ? null : Number(c.value);
+    if (/int$|float$/.test(tp)) return c.value === "" ? null : Number(c.value);
     if (tp === "list") return c.value.split("\n").map((x) => x.trim()).filter(Boolean);
+    if (tp === "json") { try { return JSON.parse(c.value); } catch { return c.value; } } // invalid: the server refuses it
     return c.value;
   };
   const initial = new Map([...main.querySelectorAll(".field")].map((el) => [el.dataset.key, JSON.stringify(read(el))]));

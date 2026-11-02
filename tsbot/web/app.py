@@ -127,20 +127,109 @@ FIELDS = [
     ("voice.phrases", "unknown_speaker", "str", "Phrase : personne inconnue", "Dite quand quelqu'un sans identité demande une action."),
     ("web", "admin_groups", "list", "Grades administrateurs du site", "Grades TeamSpeak dont les membres administrent ce site. Un par ligne."),
     ("web", "admin_uids", "list", "Administrateurs supplémentaires (UID)", "Identifiants TeamSpeak administrateurs même sans le grade. Un par ligne."),
+    ("teamspeak", "identity_file", "str", "Fichier d'identité du bot", "Profil TeamSpeak du bot. À garder : sans lui, le bot se recrée une identité."),
+    ("stt", "vad", "bool", "Détecter la voix (Silero)", "Découpe le son selon la voix avant la transcription. Désactivé : tout le son est envoyé."),
+    ("stt", "vad_split_ms", "int", "Pause qui coupe une phrase (ms)", "Silence qui sépare deux phrases pour le détecteur de voix."),
+    ("stt", "vad_pad_ms", "int", "Marge autour de la voix (ms)", "Silence gardé avant et après chaque phrase : évite de couper le début d'un mot."),
+    ("stt", "lead_in_ms", "int", "Silence ajouté avant le son (ms)", "Silence ajouté devant chaque phrase pour le modèle local (sinon le début est coupé)."),
+    ("stt", "max_tokens_per_s", "int", "Morceaux de texte max par seconde de son", "Plafond contre les boucles du modèle (« o o o… »)."),
+    ("stt", "max_words_per_s", "int", "Mots max par seconde de son", "Un texte plus long que 2 + ce chiffre × la durée du son est rejeté (texte inventé sur un bruit)."),
+    ("stt", "gemini_url", "str", "Adresse de l'API Gemini", "Point d'entrée compatible OpenAI pour la transcription. Par défaut celui de Google."),
+    ("stt", "gemini_timeout_s", "int", "Délai maximal Gemini (s)", "Au-delà, la transcription Gemini compte comme un échec et le modèle local prend le relais."),
+    ("stt", "gemini_fallbacks", "json", "Modèles Gemini de secours", "Liste JSON, par exemple [{\"model\": \"gemini-flash-lite-latest\"}]. Essayés dans l'ordre si le premier échoue."),
+    ("stt", "laugh_model", "str", "Modèle de détection des rires", "Modèle Hugging Face du détecteur de rires. À ne changer qu'avec un modèle testé."),
+    ("stt", "laugh_text", "str", "Texte écrit pour un rire", "Ce qui est écrit quand quelqu'un rit."),
+    ("stt", "compare_model", "str", "Modèle de comparaison", "Un second modèle transcrit les mêmes sons en arrière-plan, pour comparer dans le journal. Vide = désactivé."),
+    ("stt", "compare_threads", "int", "Cœurs du modèle de comparaison", "Processeur utilisable par le modèle de comparaison."),
+    ("stt", "compare_nice", "int", "Priorité du modèle de comparaison", "Plus haut = moins prioritaire que le bot."),
+    ("stt", "compare_queue", "int", "File d'attente de comparaison", "Nombre de sons qui attendent le modèle de comparaison ; au-delà, ils sont sautés."),
+    ("llm", "temperature", "float", "Température du LLM", "Créativité des réponses. 0 fait répéter les petits modèles mot pour mot."),
+    ("llm", "rest_s", "int", "Repos d'un service LLM en panne (s)", "Un service qui échoue reste à l'écart ce temps, doublé à chaque échec d'affilée."),
+    ("llm", "fallbacks", "json", "Services LLM de secours", "Liste JSON : base_url, model, api_key_env (nom d'une variable du fichier .env), timeout_s… Essayés dans l'ordre."),
+    ("llm", "prompt_file", "str", "Fichier de consignes du LLM", "Chemin du fichier de consignes. À changer seulement pour une autre langue."),
+    ("llm", "changelog_file", "str", "Fichier des nouveautés", "Le bot lit ce fichier pour dire ce qui est nouveau."),
+    ("llm", "changelog_versions", "int", "Versions lues pour les nouveautés", "Nombre de dernières versions que le bot peut citer."),
+    ("follow", "move_timeout_s", "int", "Délai pour entrer dans un salon (s)", "Si le bot n'arrive pas à entrer dans un salon pendant ce temps, il le laisse de côté."),
+    ("follow", "blocked_s", "int", "Mise à l'écart d'un salon refusé (s)", "Durée pendant laquelle le bot n'essaie plus un salon qui l'a refusé."),
+    ("follow", "identity_file_2", "str", "Fichier d'identité du 2e bot", "Vide = à côté de l'identité du bot principal."),
+    ("voice", "language", "str", "Langue de la voix", "Code de langue de la synthèse vocale, par exemple fr."),
+    ("voice", "phonon_model", "str", "Modèle Phonon", "Modèle de voix téléchargé depuis Hugging Face."),
+    ("voice", "phonon_voices_dir", "str", "Dossier des voix Phonon", "Où sont rangées les voix supplémentaires."),
+    ("voice", "piper_dir", "str", "Dossier des modèles Piper", "Où sont rangés les modèles Piper."),
+    ("voice", "cache_dir", "str", "Cache des phrases dites", "Chaque phrase est générée une fois, puis rejouée depuis ce dossier."),
+    ("archive", "path", "str", "Fichier d'archive", "Base SQLite des phrases transcrites. Changer le chemin ne déplace pas le fichier."),
+    ("privacy", "opt_out_uids", "list", "Personnes non transcrites (UID)", "Mêmes personnes que sur la page Identités. Un UID par ligne."),
+    ("web", "port", "int", "Port du site", "Port d'écoute du site. Prend effet au redémarrage du site."),
+    ("web", "host", "str", "Adresse d'écoute du site", "0.0.0.0 = accessible depuis le réseau ; 127.0.0.1 = cette machine seulement. Prend effet au redémarrage."),
+    ("web", "control_port", "int", "Port de l'API de contrôle du bot", "Port local par lequel le site parle au bot. Prend effet au redémarrage."),
+    ("web", "token_file", "str", "Fichier du jeton de contrôle", "Jeton partagé entre le site et le bot. Prend effet au redémarrage."),
+    ("web", "settings_file", "str", "Fichier des réglages du site", "Où le site écrit ses réglages. Prend effet au redémarrage."),
+    ("web", "secret_file", "str", "Fichier de la clé de session", "Clé qui signe les connexions. Changer le fichier déconnecte tout le monde."),
+    ("web", "bot_timeout_s", "int", "Délai de réponse du bot (s)", "Au-delà, le site considère le bot injoignable."),
+    ("web", "code_resend_s", "int", "Délai avant un nouveau code (s)", "Temps à attendre avant de renvoyer un code de connexion."),
+    ("web", "code_ttl_s", "int", "Validité du code de connexion (s)", "Durée pendant laquelle un code de connexion marche."),
+    ("web", "code_tries", "int", "Essais du code de connexion", "Nombre de mauvais codes avant de refuser le code."),
+    ("web", "session_days", "int", "Durée d'une session (jours)", "Combien de jours on reste connecté au site."),
+    ("web", "self_service", "str", "Service du site lui-même", "Nom du service du site : il ne peut pas s'arrêter lui-même."),
+    ("web", "services", "list", "Services que le site peut gérer", "Noms des services systemd affichés sur la page Services. Un par ligne."),
+    ("web", "clients_refresh_s", "int", "Rafraîchissement de la liste des joueurs (s)", "Intervalle de lecture de qui est où, pour le suivi des joueurs."),
 ]
 
 
 # Values the bot uses when the config does not set them: shown in the form instead of an empty box.
 DEFAULTS = {
+    "teamspeak.identity_file": "data/identity.json",
     "stt.min_level_db": -100,
     "stt.gemini_min_ms": 900,
     "stt.noise_phrases": ["merci"],
     "stt.noise_max_ms": 1500,
+    "stt.vad": True,
+    "stt.vad_split_ms": 2000,
+    "stt.vad_pad_ms": 250,
+    "stt.lead_in_ms": 300,
+    "stt.max_tokens_per_s": 10,
+    "stt.max_words_per_s": 6,
+    "stt.gemini_url": "https://generativelanguage.googleapis.com/v1beta/openai",
+    "stt.gemini_timeout_s": 15,
+    "stt.gemini_fallbacks": [],
+    "stt.laugh_model": "mispeech/ced-mini",
+    "stt.laugh_text": "(rires)",
+    "stt.compare_threads": 2,
+    "stt.compare_nice": 15,
+    "stt.compare_queue": 3,
     "llm.json_mode": True,
     "llm.follow_up_min_words": 3,
+    "llm.temperature": 0.5,
+    "llm.rest_s": 60,
+    "llm.fallbacks": [],
+    "llm.prompt_file": "prompts/system_fr.txt",
+    "llm.changelog_file": "CHANGELOG.md",
+    "llm.changelog_versions": 3,
     "follow.max_bots": 2,
     "follow.move_after_s": 3,
     "follow.stop_after_s": 60,
+    "follow.move_timeout_s": 15,
+    "follow.blocked_s": 600,
+    "voice.language": "fr",
+    "voice.phonon_model": "hf://gradium/phonon-40m-fr",
+    "voice.phonon_voices_dir": "data/voices",
+    "voice.piper_dir": "data/models/piper",
+    "voice.cache_dir": "data/tts_cache",
+    "archive.path": "data/archive.sqlite3",
+    "web.port": 8095,
+    "web.host": "0.0.0.0",
+    "web.control_port": 8096,
+    "web.token_file": "data/control_token",
+    "web.settings_file": "data/settings.json",
+    "web.secret_file": "data/web_secret",
+    "web.bot_timeout_s": 60,
+    "web.code_resend_s": 30,
+    "web.code_ttl_s": 300,
+    "web.code_tries": 5,
+    "web.session_days": 30,
+    "web.self_service": "web",
+    "web.services": [],
+    "web.clients_refresh_s": 1,
 }
 
 
@@ -148,6 +237,26 @@ def get_path(cfg: dict, dotted: str) -> dict:
     for part in dotted.split("."):
         cfg = cfg.get(part, {}) if isinstance(cfg, dict) else {}
     return cfg if isinstance(cfg, dict) else {}
+
+
+SECRET_KEYS = ("api_key", "token", "password")
+
+
+def field_value(cfg: dict, section: str, key: str, kind: str):
+    """What the form shows: secrets masked, and the bot's default when the config does not set the value."""
+    saved = get_path(cfg, section).get(key, DEFAULTS.get(f"{section}.{key}"))
+    if kind == SECRET:
+        return MASK if saved else ""
+    if kind == "json" and isinstance(saved, list):
+        return [{k: (MASK if k in SECRET_KEYS and v else v) for k, v in item.items()} for item in saved]
+    return saved
+
+
+def restore_masked(new, old: list):
+    """A masked secret left as it is keeps the value saved at the same place in the list."""
+    if not isinstance(new, list):
+        return new
+    return [{k: (old[i].get(k) if v == MASK and i < len(old) else v) for k, v in item.items()} for i, item in enumerate(new)]
 
 
 class HttpError(Exception):
@@ -476,7 +585,7 @@ class App:
                     "type": t,
                     "label": tr(f"field.{s}.{k}.label", lang) if tr(f"field.{s}.{k}.label", lang) != f"field.{s}.{k}.label" else label,
                     "help": tr(f"field.{s}.{k}.help", lang) if tr(f"field.{s}.{k}.help", lang) != f"field.{s}.{k}.help" else h,
-                    "value": (MASK if get_path(cfg, s).get(k) else "") if t == SECRET else get_path(cfg, s).get(k, DEFAULTS.get(f"{s}.{k}")),
+                    "value": field_value(cfg, s, k, t),
                     **({"type": "choice:" + ",".join(["default", *self.voice_names()])} if t == "voice" else {}),
                     "default": DEFAULTS.get(f"{s}.{k}", DEFAULT_PHRASES.get(k) if s == "voice.phrases" else None),
                 }
@@ -517,6 +626,8 @@ class App:
                 target = target.setdefault(part, {})
             if kind == SECRET and value == MASK:
                 continue  # left as is: keep the saved password
+            if kind == "json":
+                value = restore_masked(value, get_path(self.current_config(), section).get(key, []))
             target[key] = self.checked("str" if kind == SECRET else kind, value, dotted, lang=lang)
         if "identities" in changes:
             table = changes["identities"]
@@ -552,6 +663,10 @@ class App:
         if kind == "int" and isinstance(value, int) and not isinstance(value, bool) and value >= 0:
             return value
         if kind == "sint" and isinstance(value, int) and not isinstance(value, bool):
+            return value
+        if kind == "float" and isinstance(value, (int, float)) and not isinstance(value, bool) and value >= 0:
+            return float(value)
+        if kind == "json" and isinstance(value, list) and all(isinstance(v, dict) for v in value):
             return value
         if kind in ("str", "text") and isinstance(value, str):
             return value.strip()

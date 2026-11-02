@@ -552,6 +552,7 @@ legend { font-size: 16px; font-weight: 700; color: var(--strong); padding: 0; ma
 
 /* Settings: search and section jumps */
 .tools { display: grid; gap: var(--space-3); margin-bottom: var(--space-4); }
+textarea.code { font-family: var(--mono); font-size: 13px; }
 .jump { display: flex; flex-wrap: wrap; gap: var(--space-2); }
 .chip-btn {
   border: 1px solid var(--edge);

@@ -165,6 +165,18 @@ class WebTest(unittest.TestCase):
         self.assertEqual(level(self.call(admin, "POST", "/api/settings", {"fields": {"stt.min_level_db": -45}})), -45)
         self.assertIn("error", self.call(admin, "POST", "/api/settings", {"fields": {"stt.min_level_db": "fort"}}))
 
+    def test_json_fields_mask_secrets_and_keep_them_on_save(self):
+        admin = self.login(ADMIN)
+        fallbacks = [{"base_url": "https://x.example/v1", "api_key": "s3cret"}]
+        self.call(admin, "POST", "/api/settings", {"fields": {"llm.fallbacks": fallbacks}})
+        shown = next(f for f in self.call(admin, "GET", "/api/settings")["fields"] if f["key"] == "fallbacks")["value"]
+        self.assertEqual(shown, [{"base_url": "https://x.example/v1", "api_key": MASK}])
+        self.call(admin, "POST", "/api/settings", {"fields": {"llm.fallbacks": shown}})  # masked = unchanged
+        self.assertEqual(self.app.current_config()["llm"]["fallbacks"], fallbacks)
+        self.assertIn("error", self.call(admin, "POST", "/api/settings", {"fields": {"llm.fallbacks": "pas du json"}}))
+        temperature = self.call(admin, "POST", "/api/settings", {"fields": {"llm.temperature": 0.3}})
+        self.assertEqual(next(f["value"] for f in temperature["fields"] if f["key"] == "temperature"), 0.3)
+
     def test_services_are_limited_to_the_configured_ones(self):
         admin = self.login(ADMIN)
         self.app.services = ["llm", "web"]
