@@ -46,6 +46,8 @@ function t(key, params = {}) {
   }
   return text;
 }
+// Keys built from server values (sections, services, statuses) may have no translation: show the raw value then.
+const tOr = (key, fallback) => (key in dict || key in fallbackDict ? t(key) : fallback);
 
 async function setLanguage(newLang) {
   if (newLang === currentLang && Object.keys(dict).length > 0) return;
@@ -149,8 +151,14 @@ document.addEventListener("click", (e) => {
 }, true);
 
 // ---- Date & Time Formatters ----
-const when = (ms) => new Date(ms).toLocaleString(currentLang === "en" ? "en-US" : "fr-FR", { dateStyle: "short", timeStyle: "short" });
+// Today: the time alone; older: date and time.
+const when = (ms) => {
+  const d = new Date(ms);
+  const today = d.toDateString() === new Date().toDateString();
+  return d.toLocaleString(currentLang === "en" ? "en-US" : "fr-FR", today ? { timeStyle: "short" } : { dateStyle: "short", timeStyle: "short" });
+};
 const secs = (ms) => (ms == null ? "—" : `${(ms / 1000).toLocaleString(currentLang === "en" ? "en-US" : "fr-FR", { maximumFractionDigits: 1 })} s`);
+const span = (ms) => (ms < 60000 ? secs(ms) : t("stats.minutes_short", { min: Math.round(ms / 60000) }));
 const ago = (ms) => {
   const s = Math.round((Date.now() - ms) / 1000);
   if (s < 60) return t("time.just_now");
@@ -168,9 +176,7 @@ function avatar(name, talking = false) {
   return `<span class="avatar${talking ? " talking" : ""}" style="--avatar:hsl(${h} 42% 40%)" aria-hidden="true">${esc(initials)}</span>`;
 }
 
-function getStatusLabel(status) {
-  return t(`status.${status}`) || status;
-}
+const getStatusLabel = (status) => tOr(`status.${status}`, status);
 
 // ---- Frame: Navigation Rail, Lamp, Theme ----
 const PAGES = {
@@ -288,7 +294,7 @@ async function show() {
   try {
     await PAGES[page].render();
   } catch (e) {
-    main.innerHTML = `<div class="panel stack" role="alert"><p class="bad">${esc(e.message)}</p><button class="btn" onclick="location.reload()">${esc(t("dialog.confirm"))}</button></div>`;
+    main.innerHTML = `<div class="panel stack" role="alert"><p class="bad">${esc(e.message)}</p><button class="btn" onclick="location.reload()">${esc(t("refresh.now"))}</button></div>`;
   }
   main.focus({ preventScroll: true });
 }
@@ -470,6 +476,7 @@ async function pageActions() {
 function conversationFeed(list, statusEl) {
   let last = 0;
   let first = true;
+  let prev = {}; // the line above: a follow-up by the same speaker drops the repeated name and avatar
   return async () => {
     const [rows, pres] = await Promise.all([api(`/api/conversation?after_id=${last}`), api("/api/presence")]);
     statusEl.className = "hearing " + (pres.hearing ? "on" : "off");
@@ -483,12 +490,16 @@ function conversationFeed(list, statusEl) {
     if (first || last === 0) list.innerHTML = "";
     first = false;
     const atBottom = list.scrollHeight - list.scrollTop - list.clientHeight < 60;
-    list.insertAdjacentHTML("beforeend", rows.map((r) => `
-      <div class="line${r.name && r.name.startsWith(BOT) ? " bot" : ""}">
+    list.insertAdjacentHTML("beforeend", rows.map((r) => {
+      const cont = r.name === prev.name && r.started_ms - prev.ms < 120000;
+      prev = { name: r.name, ms: r.started_ms };
+      return `
+      <div class="line${r.name && r.name.startsWith(BOT) ? " bot" : ""}${cont ? " cont" : ""}">
         ${avatar(r.name)}
         <div class="who">${esc(r.name)}<time datetime="${new Date(r.started_ms).toISOString()}">${when(r.started_ms)}</time></div>
         <p class="said">${esc(r.text)}</p>
-      </div>`).join(""));
+      </div>`;
+    }).join(""));
     last = rows[rows.length - 1].id;
     if (atBottom) list.scrollTop = list.scrollHeight;
   };
@@ -534,20 +545,22 @@ async function pageProfile() {
     <form id="profile-form" class="stack">
       <fieldset class="panel stack">
         <legend>${esc(t("profile.sec_identity"))}</legend>
-        <div class="field">
-          <label for="prof-id">${esc(t("profile.identity_label"))}</label>
-          <input id="prof-id" type="text" value="${esc(prof.identity || "")}" readonly aria-describedby="prof-id-help">
-          <p id="prof-id-help" class="help">${esc(t("profile.identity_help"))}</p>
-        </div>
-        <div class="field">
-          <label for="prof-nick">${esc(t("profile.ts_nickname_label"))}</label>
-          <input id="prof-nick" type="text" value="${esc(me.nickname || "")}" readonly disabled style="opacity:0.8">
-        </div>
-        <div class="field">
-          <label for="prof-uid">${esc(t("profile.uid_label"))}</label>
-          <input id="prof-uid" type="text" value="${esc(prof.uid || me.uid)}" readonly disabled style="font-family:var(--mono);font-size:12px;opacity:0.8" aria-describedby="prof-uid-help">
-          <p id="prof-uid-help" class="help">${esc(t("profile.uid_help"))}</p>
-        </div>
+        <dl class="readout">
+          <div class="field">
+            <dt>${esc(t("profile.identity_label"))}</dt>
+            <dd>${esc(prof.identity || "—")}</dd>
+            <dd class="help">${esc(t("profile.identity_help"))}</dd>
+          </div>
+          <div class="field">
+            <dt>${esc(t("profile.ts_nickname_label"))}</dt>
+            <dd>${esc(me.nickname || "—")}</dd>
+          </div>
+          <div class="field">
+            <dt>${esc(t("profile.uid_label"))}</dt>
+            <dd class="mono">${esc(prof.uid || me.uid)}</dd>
+            <dd class="help">${esc(t("profile.uid_help"))}</dd>
+          </div>
+        </dl>
       </fieldset>
 
       <fieldset class="panel stack">
@@ -613,9 +626,9 @@ async function pageServices() {
         <div class="row">
           <span class="lamp-dot ${s.active === "active" ? "on" : s.active === "failed" ? "down" : ""}" aria-hidden="true"></span>
           <div>
-            <strong>${esc(t(`services.label.${s.name}`) || s.name)}</strong>
+            <strong>${esc(tOr(`services.label.${s.name}`, s.name))}</strong>
             <div class="muted">
-              ${esc(t(`services.state.${s.active}`) || s.active)}
+              ${esc(tOr(`services.state.${s.active}`, s.active))}
               ${s.active === "active" && s.since ? esc(t("services.since", { time: when(Number(s.since.replace("@", "")) * 1000) })) : ""}
               ${Number(s.restarts) ? esc(t("services.restarts", { count: s.restarts })) : ""}
             </div>
@@ -640,7 +653,7 @@ async function pageServices() {
         const act = b.dataset.act;
         const actionLabel = act === "start" ? t("services.btn_start") : act === "stop" ? t("services.btn_stop") : t("services.btn_restart");
         const warn = name === "web" ? t("services.web_restart_warn") : name === "tsbot" ? t("services.tsbot_restart_warn") : "";
-        const serviceName = t(`services.label.${name}`) || name;
+        const serviceName = tOr(`services.label.${name}`, name);
         if (act !== "start" && !(await confirmBox(t("services.confirm_prompt", { action: actionLabel, service: serviceName, warning: warn }), actionLabel))) return;
         try {
           await api("/api/services", { name, action: act });
@@ -696,7 +709,7 @@ async function pageLive() {
         <li class="${talking.has(c.client_id) ? "talking" : ""}">
           ${avatar(c.nickname, talking.has(c.client_id))}
           ${esc(c.nickname)}
-          <span class="id">${esc(c.identity || t("live.unknown_id"))}</span>
+          <span class="id">${talking.has(c.client_id) ? `<span class="talk-tag">${esc(t("live.talking"))}</span>` : esc(c.identity || t("live.unknown_id"))}</span>
         </li>`).join("")
       : `<li class="muted">${esc(t("live.channel_empty"))}</li>`;
   };
@@ -765,10 +778,7 @@ async function pageSettings() {
   const s = await api("/api/settings");
   const groups = {};
   s.fields.forEach((f) => (groups[f.section] ||= []).push(f));
-  const getSectionTitle = (sec) => {
-    const key = `settings.sec.${sec.replace(/\./g, "_")}`;
-    return t(key) || sec;
-  };
+  const getSectionTitle = (sec) => tOr(`settings.sec.${sec.replace(/\./g, "_")}`, sec);
 
   const inputControl = (f) => {
     const id = `f-${f.section}-${f.key}`.replace(/\./g, "-");
@@ -911,7 +921,7 @@ async function pagePeople() {
                 <th scope="col">${esc(t("people.th_target"))}</th>
                 <th scope="col">${esc(t("people.th_player"))}</th>
                 <th scope="col">${esc(t("people.th_admin"))}</th>
-                <th scope="col"><span class="skip">Actions</span></th>
+                <th scope="col"><span class="sr-only">Actions</span></th>
               </tr>
             </thead>
             <tbody>
@@ -1117,7 +1127,7 @@ async function pageStats() {
       </div>
       <section class="panel">
         <h2>${esc(t("stats.sec_speakers"))}</h2>
-        ${s.speakers.length ? bars(s.speakers, (r) => r.ms, (r) => r.name, (r) => t("stats.minutes_short", { min: Math.round(r.ms / 60000) })) : `<p class="empty">${esc(t("stats.empty_speakers"))}</p>`}
+        ${s.speakers.length ? bars(s.speakers, (r) => r.ms, (r) => r.name, (r) => span(r.ms)) : `<p class="empty">${esc(t("stats.empty_speakers"))}</p>`}
       </section>
       <section class="panel">
         <h2>${esc(t("stats.sec_daily"))}</h2>

@@ -85,7 +85,7 @@
   "conversation.btn_stats": "Voir les stats",
   "conversation.btn_profile": "Mon identité & micro",
   "conversation.help_presence_tip": "Rejoins le salon TeamSpeak où se trouve {bot} avec ton casque actif pour suivre la conversation en direct.",
-  "profile.title": "Mon identité & Vie privée",
+  "profile.title": "Mon identité & micro",
   "profile.lede": "Ton nom de joueur pour {bot} et la transcription de ta voix.",
   "profile.sec_identity": "Identité de joueur",
   "profile.identity_label": "Nom de joueur",
@@ -93,8 +93,8 @@
   "profile.ts_nickname_label": "Pseudo TeamSpeak actuel",
   "profile.uid_label": "Identifiant TeamSpeak fixe (UID)",
   "profile.uid_help": "Ton identifiant unique sur ce serveur TeamSpeak.",
-  "profile.sec_privacy": "Vie privée & Micro",
-  "profile.opt_out_label": "Ne pas transcrire ma voix (Opt-out)",
+  "profile.sec_privacy": "Vie privée et micro",
+  "profile.opt_out_label": "Ne pas transcrire ma voix",
   "profile.opt_out_help": "Si activé, le bot ignore totalement ta voix dans TeamSpeak : aucune parole n'est transcrite ni enregistrée.",
   "profile.btn_save": "Enregistrer mes préférences",
   "profile.saved_toast": "Préférences enregistrées avec succès.",
@@ -370,5 +370,9 @@
   "field.follow.move_after_s.label": "Délai avant de suivre (s)",
   "field.follow.move_after_s.help": "Les joueurs doivent rester ce temps dans un autre salon avant que le bot les suive (évite les allers-retours).",
   "field.follow.stop_after_s.label": "Délai avant que le 2e bot parte (s)",
-  "field.follow.stop_after_s.help": "Le deuxième bot repart ce temps après que les joueurs se sont retrouvés."
+  "field.follow.stop_after_s.help": "Le deuxième bot repart ce temps après que les joueurs se sont retrouvés.",
+  "nav.profile": "Mon profil",
+  "settings.sec.archive": "Archive",
+  "settings.sec.privacy": "Vie privée",
+  "live.talking": "parle"
 }

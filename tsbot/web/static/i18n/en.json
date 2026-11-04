@@ -85,7 +85,7 @@
   "conversation.btn_stats": "View stats",
   "conversation.btn_profile": "My identity & mic",
   "conversation.help_presence_tip": "Join the TeamSpeak channel where {bot} is located with your headset unmuted to follow the conversation live.",
-  "profile.title": "My Identity & Privacy",
+  "profile.title": "My Identity & Mic",
   "profile.lede": "Your player name for {bot} and the transcription of your voice.",
   "profile.sec_identity": "Player Identity",
   "profile.identity_label": "Player Name",
@@ -93,8 +93,8 @@
   "profile.ts_nickname_label": "Current TeamSpeak Nickname",
   "profile.uid_label": "Permanent TeamSpeak Identifier (UID)",
   "profile.uid_help": "Your unique identifier on this TeamSpeak server.",
-  "profile.sec_privacy": "Privacy & Microphone",
-  "profile.opt_out_label": "Do not transcribe my voice (Opt-out)",
+  "profile.sec_privacy": "Privacy & microphone",
+  "profile.opt_out_label": "Do not transcribe my voice",
   "profile.opt_out_help": "If enabled, the bot completely ignores your voice in TeamSpeak: nothing is transcribed or saved.",
   "profile.btn_save": "Save my preferences",
   "profile.saved_toast": "Preferences saved successfully.",
@@ -462,5 +462,9 @@
   "field.web.services.label": "Services the site can manage",
   "field.web.services.help": "Names of the systemd services shown on the Services page. One per line.",
   "field.web.clients_refresh_s.label": "Player list refresh (s)",
-  "field.web.clients_refresh_s.help": "Interval at which who-is-where is read, for following players."
+  "field.web.clients_refresh_s.help": "Interval at which who-is-where is read, for following players.",
+  "nav.profile": "My profile",
+  "settings.sec.archive": "Archive",
+  "settings.sec.privacy": "Privacy",
+  "live.talking": "talking"
 }

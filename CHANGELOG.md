@@ -2,6 +2,16 @@
 
 Newest first. The bot reads the "Plain words" lines of the latest versions, so it can tell what is new when asked.
 
+## 0.3.1 — 2026-11-04
+
+**Plain words:** The site is easier to read: no more untranslated labels, the person talking stands out, today's messages show only the time, and the same person's messages in a row are grouped.
+
+**Technical:**
+- Site: missing French and English labels added (profile link, "Archive" and "Privacy" settings sections); labels built from server values fall back to the raw value instead of a translation key.
+- Site: menu button hidden on wide screens; side menu without false "fold" arrows or hollow bullets; profile shows read-only facts as text instead of locked inputs; unsaved settings marked by a dot (the old " (modifié)" stayed French in English); visible focus ring on inputs; error page button says "Refresh".
+- Live page: the person talking is tinted with a "talking" tag; stats show seconds under a minute instead of "0 min"; even dividers in the status strip.
+- Checked in a local preview (fake bot) on desktop, phone and light theme, and with the unit tests.
+
 ## 0.3.0 — 2026-10-26
 
 **Plain words:** The bot hears better (Google Gemini writes most sentences), always answers when you call it, knows what it is and how it works, sees when people talk over each other, keeps going when an AI service stops answering, can tell what is new, and the site has a real space for players.
